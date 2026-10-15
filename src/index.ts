@@ -1,12 +1,15 @@
 // Sage — entry point. Photon Spectrum delivers iMessages; this file decides what to do with them.
 
 import { Spectrum, markdown, type Message, type Space } from "spectrum-ts";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { imessage } from "spectrum-ts/providers/imessage";
 import { terminal } from "spectrum-ts/providers/terminal";
 import { config, assertConfig } from "./config";
 import { understand, type Media } from "./brain";
 import { investigate, recover } from "./investigate";
-import { verdictMessage, followupMessage, progressDone, isBad, ONBOARDING, HELP } from "./format";
+import { verdictMessage, followupMessage, progressDone, ONBOARDING, HELP } from "./format";
 import {
   getUser, updateUser, getPending, setPending, findUserByGuardianPhone,
   addTurn, recentTurns, saveCheck, recentChecks, usageGet, usageInc, type User,
@@ -40,6 +43,30 @@ async function safeReact(message: Message, emoji: string) {
   }
 }
 
+/** Masks a phone number for logs: +19055551234 → +1905***1234. */
+const mask = (id: string) => id.replace(/^(\+?\d{4})\d+(\d{4})$/, "$1***$2");
+
+// Gemini accepts these audio types; iMessage voice notes are usually Core Audio (.caf), which it rejects.
+const GEMINI_AUDIO = /^audio\/(wav|x-wav|mp3|mpeg|aiff|x-aiff|aac|ogg|flac)$/;
+
+/** Converts an unsupported audio clip to 16 kHz mono WAV with macOS's built-in afconvert. */
+async function toWav(buf: Buffer): Promise<Buffer | null> {
+  const dir = await mkdtemp(join(tmpdir(), "sage-audio-"));
+  try {
+    const src = join(dir, "in.caf");
+    const out = join(dir, "out.wav");
+    await writeFile(src, buf);
+    const proc = Bun.spawn(["afconvert", "-f", "WAVE", "-d", "LEI16@16000", "-c", "1", src, out], { stderr: "pipe" });
+    if ((await proc.exited) !== 0) throw new Error(await new Response(proc.stderr).text());
+    return await readFile(out);
+  } catch (e) {
+    console.warn("[audio] conversion failed:", (e as Error).message);
+    return null;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
 /** Collect text + media from one or more inbound messages. */
 async function collect(messages: Message[]) {
   const texts: string[] = [];
@@ -50,10 +77,18 @@ async function collect(messages: Message[]) {
       if (c.type === "text") texts.push(c.text);
       else if (c.type === "richlink") texts.push(c.url);
       else if ((c.type === "attachment" || c.type === "voice") && media.length < 3) {
-        const mime: string = c.mimeType ?? "";
+        let mime: string = c.mimeType ?? "";
         if (/^(image\/|audio\/|application\/pdf)/.test(mime)) {
-          const buf: Buffer = await c.read();
-          if (buf.length < 15 * 1024 * 1024) media.push({ mimeType: mime, base64: buf.toString("base64") });
+          let buf: Buffer | null = await c.read();
+          if (buf && mime.startsWith("audio/") && !GEMINI_AUDIO.test(mime)) {
+            console.info(`[collect] converting ${mime} voice note to WAV`);
+            buf = await toWav(buf);
+            mime = "audio/wav";
+          }
+          // Gemini's inline limit is 20 MB per request after base64 (+33%), so keep raw media under ~14 MB.
+          if (!buf) texts.push("[sent a voice note that couldn't be read]");
+          else if (buf.length < 14 * 1024 * 1024) media.push({ mimeType: mime, base64: buf.toString("base64") });
+          else texts.push(`[sent a file too large to read: ${c.name ?? mime}]`);
         } else texts.push(`[sent a file: ${c.name ?? mime}]`);
       } else if (c.type === "group") for (const item of c.items) await visit(item);
       else if (c.type === "reply") await visit({ ...m, content: c.content } as Message);
@@ -165,6 +200,9 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
     case "help":
       return say(space, senderId, HELP(config.botName));
 
+    case "followup":
+      return say(space, senderId, u.reply ?? "That's my answer from the check above — if you have more details, send them and I'll look again.");
+
     case "need_screenshot":
     case "chat":
       return say(space, senderId, u.reply ?? "Send me the message or a screenshot and I'll check it.");
@@ -199,19 +237,36 @@ async function runCheck(space: Space, user: User, last: Message, check: NonNulla
   usageInc(key);
 
   await safeReact(last, "‼️"); // instant "got it" — iMessage tapback
-  const progressMsg = await space.send("🔎 On it — checking this against the live web…").catch(() => undefined);
   addTurn(user.id, "sage", "(checking…)");
-  const progress = async (line: string) => {
-    try {
-      await progressMsg?.edit(line);
-    } catch {
-      /* edits are best-effort */
-    }
+
+  // One progress bubble, edited in place. iMessage allows only 5 edits per message (later ones are silently
+  // dropped — the bubble froze mid-check in live testing), so: the first update is a fresh send, then at most
+  // 4 edits, with the last edit reserved for the final "✓ Checked…" line. Updates are queued so they land in order.
+  const MAX_EDITS = 5;
+  let progressMsg: Message | undefined;
+  let edits = 0;
+  let queue: Promise<void> = Promise.resolve();
+  const update = (line: string, final = false) => {
+    queue = queue.then(async () => {
+      try {
+        if (!progressMsg) {
+          progressMsg = (await space.send(line)) ?? undefined;
+          return;
+        }
+        if (edits >= MAX_EDITS || (!final && edits >= MAX_EDITS - 1)) return;
+        edits++;
+        await progressMsg.edit(line);
+      } catch (e) {
+        console.warn("[progress]", (e as Error).message);
+      }
+    });
+    return queue;
   };
+  const progress = (line: string) => update(line);
 
   try {
     const inv = await space.responding(() => investigate(check, language, progress));
-    await progress(progressDone(inv));
+    await update(progressDone(inv), true);
     await say(space, user.id, verdictMessage(inv), true);
     const follow = followupMessage(inv);
     if (follow) await say(space, user.id, follow, true);
@@ -219,8 +274,9 @@ async function runCheck(space: Space, user: User, last: Message, check: NonNulla
     const j = inv.judgement;
     const checkId = saveCheck(user.id, check.type, j.verdict, j.headline, check.summary);
 
-    // The "right moment": only after a bad verdict, only if a confirmed guardian exists, only with consent.
-    if (isBad(j.verdict) && check.type === "scam") {
+    // The "right moment": only after a clear SCAM verdict, only if a confirmed guardian exists, only with consent.
+    // (Not after SUSPICIOUS — in live testing the tip fired on a real salon booking text.)
+    if (j.verdict === "SCAM") {
       if (user.guardian_status === "confirmed" && user.guardian_phone) {
         setPending(user.id, { type: "guardian_alert", checkId, summary: `${check.summary} — ${j.headline}` });
         await say(space, user.id, `Want me to give ${user.guardian_name ?? "your family contact"} a heads-up so they don't fall for this one? (yes/no)`);
@@ -231,7 +287,7 @@ async function runCheck(space: Space, user: User, last: Message, check: NonNulla
     }
   } catch (e) {
     console.error("[check]", e);
-    await progress("⚠️ Couldn't finish the check");
+    await update("⚠️ Couldn't finish the check", true);
     await say(space, user.id, "I couldn't finish checking that — the web was slow on my end. Until I can: don't click links or call numbers in the message. Go to the company's official app or a site you type in yourself. Try me again in a minute?");
   }
 }
@@ -292,7 +348,13 @@ for await (const [space, message] of app.messages) {
   if (seen.size > 5000) seen.clear();
 
   const senderId = message.sender?.id ?? space.id;
-  if (config.allowlist.length && !config.allowlist.includes(senderId)) continue; // demo mode
+  if (config.allowlist.length && !config.allowlist.includes(senderId)) {
+    console.info(`[inbound] ignored ${t} from ${mask(senderId)} (not in ALLOWLIST)`);
+    continue; // demo mode
+  }
+  console.info(`[inbound] ${t} from ${mask(senderId)}`);
+  // Instant "I've got it" while the burst debounce waits for a possible follow-up screenshot.
+  if (!buffers.has(senderId) && !busy.has(senderId)) space.startTyping().catch(() => {});
 
   const b = buffers.get(senderId) ?? { space, messages: [] };
   b.messages.push(message);

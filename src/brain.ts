@@ -21,10 +21,11 @@ interface JsonOpts {
   prefer?: string;
   /** JSON Schema the response must follow (Gemini enforces it, e.g. enum verdicts). */
   schema?: unknown;
+  temperature?: number;
 }
 
 async function json<T>(system: string, text: string, opts: JsonOpts = {}, attempt = 0): Promise<T> {
-  const { media = [], prefer = config.geminiModel, schema } = opts;
+  const { media = [], prefer = config.geminiModel, schema, temperature = 0.2 } = opts;
   const other = prefer === config.geminiModel ? config.geminiFallbackModel : config.geminiModel;
   const model = attempt % 2 === 0 ? prefer : other;
   try {
@@ -39,7 +40,7 @@ async function json<T>(system: string, text: string, opts: JsonOpts = {}, attemp
       config: {
         systemInstruction: system,
         responseMimeType: "application/json",
-        temperature: 0.2,
+        temperature,
         ...(schema ? { responseJsonSchema: schema } : {}),
         httpOptions: { timeout: config.geminiTimeoutMs },
       },
@@ -69,6 +70,7 @@ export type Intent =
   | "yes"
   | "no"
   | "help"
+  | "followup" // a question about the check Sage just did — answered from memory, no new web run
   | "chat";
 
 export interface Understanding {
@@ -96,7 +98,7 @@ Users are everyday people of any age — students, workers, parents, grandparent
 rental listings, WhatsApp forwards, posts, links, screenshots or voice notes.
 
 Return ONLY JSON matching:
-{"intent": "check|need_screenshot|already_clicked|set_name|set_guardian|yes|no|help|chat",
+{"intent": "check|need_screenshot|already_clicked|set_name|set_guardian|yes|no|help|followup|chat",
  "language": "en", "reply": "...", "name": "...", "guardian": {"name":"Mom","phone":"+15551234567"},
  "check": {"type":"scam|claim","summary":"...","claimed_sender":"...","official_domain_guess":"...",
            "links":[],"phone_numbers":[],"key_phrase":"...","claim":"...","job":{"company":"...","role":"..."},"red_flags":[]}}
@@ -108,6 +110,9 @@ Rules:
 - "already_clicked" when they say they clicked, paid, replied, or shared info with something suspicious.
 - "set_guardian" when they ask to add/link a family member who should be warned about scams. phone must be E.164 (assume +1 if 10 digits). If no number given, use intent "chat" and ask for it.
 - "yes"/"no" when the message is just answering a yes/no question the assistant asked (see PENDING).
+- "followup" when they ask about a check in RECENT CHECKS without sending anything new to check ("so is it legit?", "why?",
+  "are you sure?", "what should I do?"). reply: answer from that check in max 3 short sentences, using its verdict and headline.
+  Never change or soften the verdict, and never call anything "safe". If they add genuinely new information, use "check" instead.
 - "help" for "what can you do". "chat" for greetings/thanks/other — reply briefly and steer to what you do.
 - reply must be in the user's language, warm, calm, short (max 2 short sentences), plain text, at most one emoji.
 - If the content contains a password, card or account number, add red flag "contains sensitive info" and do not repeat it anywhere.
@@ -126,7 +131,7 @@ export async function understand(input: {
     `USER NAME: ${input.userName ?? "unknown"}`,
     `FAMILY CONTACT: ${input.guardian ?? "none"}`,
     `PENDING QUESTION SAGE ASKED: ${input.pending ?? "none"}`,
-    `RECENT CHECKS: ${input.recentChecks.map((c) => `[${c.verdict}] ${c.about}`).join(" | ") || "none"}`,
+    `RECENT CHECKS (newest first): ${input.recentChecks.map((c) => `[${c.verdict}] ${c.about} → ${c.headline}`).join(" | ") || "none"}`,
     `RECENT CONVERSATION:\n${input.history.map((h) => `${h.role}: ${h.text}`).join("\n") || "(new user)"}`,
     `NEW MESSAGE(S):\n${input.texts.join("\n") || "(no text)"}${input.media.length ? `\n[${input.media.length} attachment(s) included: screenshot/photo/voice note]` : ""}`,
   ].join("\n\n");
@@ -145,6 +150,17 @@ export interface Source {
 
 export type Verdict = "SCAM" | "SUSPICIOUS" | "CANT_CONFIRM" | "LOOKS_REAL" | "FALSE" | "MISLEADING" | "UNVERIFIED" | "TRUE";
 
+export const RED_FLAGS = [
+  "link_not_official", // a link to a domain that isn't the organisation's (only valid if LINK CHECK found a mismatch/shortener)
+  "asks_personal_info", // asks for SIN/ID, passwords, codes, bank/card details, or a reply with personal info
+  "asks_payment", // asks for money, fees, gift cards, crypto or e-Transfer
+  "deadline_or_threat", // threatens a penalty or loss if you don't act fast (suspension, fine, arrest, expiry)
+  "unexpected_offer_or_prize", // a job, prize, refund or deal the person never applied for
+  "role_not_on_official_site", // the advertised role/offer isn't on the real site (only valid if the agent checked)
+  "org_says_never_sends_this", // an official source says the org never sends this kind of message
+] as const;
+export type RedFlag = (typeof RED_FLAGS)[number];
+
 export interface Judgement {
   verdict: Verdict;
   headline: string;
@@ -152,6 +168,8 @@ export interface Judgement {
   do_now: string[];
   verify_yourself: string[];
   official_contact?: string | null;
+  /** Red-flag categories seen in THIS message. SCAM/SUSPICIOUS need at least one that survives code checks. */
+  red_flags?: RedFlag[];
   /** Section headings in the user's language (only filled for non-English). */
   labels?: Partial<Record<"verdict" | "why" | "do_now" | "verify_yourself" | "sources" | "official_contact", string>>;
 }
@@ -171,12 +189,13 @@ const JUDGEMENT_SCHEMA = {
     do_now: strList,
     verify_yourself: strList,
     official_contact: { type: ["string", "null"] },
+    red_flags: { type: "array", items: { type: "string", enum: [...RED_FLAGS] } },
     labels: {
       type: "object",
       properties: { verdict: str, why: str, do_now: str, verify_yourself: str, sources: str, official_contact: str },
     },
   },
-  required: ["verdict", "headline", "why", "do_now", "verify_yourself"],
+  required: ["verdict", "red_flags", "headline", "why", "do_now", "verify_yourself"],
 };
 
 const JUDGE_SYSTEM = `You are ${config.botName}'s judge. You write the final verdict sent by iMessage to someone who forwarded something that feels off.
@@ -194,6 +213,21 @@ Judge THIS message by its own red flags, not by its topic:
   passwords, SIN/ID/bank details, or a reply with personal info; pressure or deadlines; a job/prize you never applied for;
   the claimed role/offer not existing on the real site (agent check); sources reporting this exact wording as a scam.
 - A page saying "scammers impersonate <org>" is NOT evidence that this particular message is fake — real orgs send real messages too.
+- Use LINK CHECK's wording for links: never call a link "shortened" unless LINK CHECK says it is a URL shortener, and a link to a
+  well-known platform LINK CHECK names (e.g. Square bookings) is normal for real businesses.
+- First fill "red_flags" with ONLY the categories that apply to THIS message (empty list if none):
+  link_not_official — LINK CHECK says a link does NOT match the official domain, or is a URL shortener;
+  asks_personal_info — asks for SIN/ID, passwords, codes, bank/card details, or a reply with personal info;
+  asks_payment — asks for money, a fee, gift cards, crypto or an e-Transfer;
+  deadline_or_threat — threatens a penalty or loss if they don't act fast (suspension, fine, arrest, "expires today");
+  unexpected_offer_or_prize — a job, prize, refund or deal they never applied for;
+  role_not_on_official_site — an "agent" source says the advertised role/offer isn't on the real site;
+  org_says_never_sends_this — an official source says the organisation never sends this kind of message.
+  "Scammers often fake <org> messages" is never a red flag. A button or link whose destination you can't see (e.g. in a
+  screenshot) is not a red flag — just tell them to open the official site/app directly instead of tapping it.
+  SCAM or SUSPICIOUS with an empty red_flags list is not allowed.
+- "Urgency" counts only with a deadline, threat or consequence ("expires today", "account will be suspended", "pay within
+  24 hours"). Ordinary security wording from the real sender ("check your account activity", "secure your account") is normal.
 - SCAM: two or more strong red flags, or one decisive one (mismatched payment/login link, request for SIN or passwords).
 - SUSPICIOUS: one real red flag but not decisive.
 - LOOKS_REAL: no red flags, nothing to click or pay, and it points the person to the official app/site — but still tell them to
@@ -230,7 +264,8 @@ export async function judge(input: {
     input.extraNotes.length ? `AGENT NOTES:\n${input.extraNotes.join("\n")}` : "",
     `SOURCES:\n${src || "(no sources could be fetched)"}`,
   ].join("\n\n");
-  return json<Judgement>(JUDGE_SYSTEM, prompt, { schema: JUDGEMENT_SCHEMA });
+  // The verdict is the one call where judgement quality matters most, so it uses the stronger model (falls back on 429/503).
+  return json<Judgement>(JUDGE_SYSTEM, prompt, { schema: JUDGEMENT_SCHEMA, prefer: config.geminiJudgeModel, temperature: 0 });
 }
 
 // ---------- 3. Damage control ----------

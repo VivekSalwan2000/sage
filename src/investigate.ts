@@ -18,6 +18,22 @@ export interface Investigation {
 
 const SOCIAL = /(facebook|instagram|twitter|x\.com|linkedin|reddit|youtube|tiktok|wikipedia|quora|pinterest)\./i;
 
+// Well-known platforms that real businesses send links through (bookings, payments, e-signatures, tickets).
+// A link here is not a domain "mismatch" on its own — in live testing a real salon's Square booking text was
+// flagged SUSPICIOUS for exactly that. Scammers can abuse these too, so the judge still weighs other red flags.
+const PLATFORMS: Record<string, string> = {
+  "squareup.com": "Square (bookings/payments)", "square.site": "Square (online stores)", "square.link": "Square (payment links)",
+  "calendly.com": "Calendly (scheduling)", "booksy.com": "Booksy (salon bookings)", "vagaro.com": "Vagaro (salon bookings)",
+  "fresha.com": "Fresha (salon bookings)", "janeapp.com": "Jane (clinic bookings)", "acuityscheduling.com": "Acuity (scheduling)",
+  "setmore.com": "Setmore (scheduling)", "mindbodyonline.com": "Mindbody (fitness bookings)", "opentable.com": "OpenTable (restaurants)",
+  "opentable.ca": "OpenTable (restaurants)", "resy.com": "Resy (restaurants)", "eventbrite.com": "Eventbrite (tickets)",
+  "eventbrite.ca": "Eventbrite (tickets)", "ticketmaster.com": "Ticketmaster (tickets)", "ticketmaster.ca": "Ticketmaster (tickets)",
+  "stripe.com": "Stripe (payments)", "paypal.com": "PayPal (payments)", "interac.ca": "Interac (e-Transfer)",
+  "myshopify.com": "Shopify (online stores)", "docusign.net": "DocuSign (e-signatures)", "docusign.com": "DocuSign (e-signatures)",
+  "zoom.us": "Zoom (meetings)", "wealthsimple.com": "Wealthsimple", "uber.com": "Uber", "doordash.com": "DoorDash",
+};
+const SHORTENERS = /^(bit\.ly|tinyurl\.com|t\.co|goo\.gl|ow\.ly|is\.gd|rebrand\.ly|cutt\.ly|shorturl\.at|rb\.gy)$/i;
+
 const regDomain = (u: string) => {
   const p = parse(u.includes("://") ? u : `https://${u}`);
   return p.domain ?? p.hostname ?? null;
@@ -70,11 +86,18 @@ export async function investigate(check: Check, language: string, progress: Prog
   const sources: Source[] = [];
   const add = (s: Omit<Source, "id">) => {
     const norm = (u: string) => u.replace(/[?#].*$/, "").replace(/\/$/, "");
-    if (sources.some((x) => norm(x.url) === norm(s.url))) return; // same page with different tracking params
+    const dup = sources.find((x) => norm(x.url) === norm(s.url)); // same page, maybe with different tracking params
+    if (dup) {
+      // The agent often starts on a page Fetch already read; keep its findings by merging them in (live testing lost them).
+      if (s.kind === "agent") dup.excerpt = `${s.excerpt}\n\n${dup.excerpt}`.slice(0, 2000);
+      return;
+    }
     sources.push({ ...s, id: sources.length + 1 });
   };
   const notes: string[] = [];
   let linkCheck = "No links in the message.";
+  let linkMismatch = false; // set only by the code's own link check — the judge can't claim it otherwise
+  let roleMissing = false; // set only when the agent really searched the careers page and found nothing
 
   if (check.type === "scam") {
     const sender = check.claimed_sender?.trim() || "";
@@ -101,14 +124,15 @@ export async function investigate(check: Check, language: string, progress: Prog
 
     // Link check: does the link actually belong to who it claims to be from?
     if (linkDomains.length) {
-      if (officialDomain) {
-        const mismatched = linkDomains.filter((d) => d !== officialDomain);
-        linkCheck = mismatched.length
-          ? `Link domain(s) ${mismatched.join(", ")} do NOT match ${sender || "the sender"}'s official domain ${officialDomain}.`
-          : `Link domain(s) match the official domain ${officialDomain}.`;
-      } else {
-        linkCheck = `Link domain(s): ${linkDomains.join(", ")}. Official domain could not be confirmed.`;
+      const facts: string[] = [];
+      for (const d of linkDomains) {
+        if (officialDomain && d === officialDomain) facts.push(`${d} matches ${sender || "the sender"}'s official domain.`);
+        else if (PLATFORMS[d]) facts.push(`${d} is ${PLATFORMS[d]}, a well-known platform real businesses use to send these links — NOT a mismatch by itself; judge by the other red flags.`);
+        else if (SHORTENERS.test(d) && (linkMismatch = true)) facts.push(`${d} is a URL shortener that hides the real destination — a red flag in an unexpected message.`);
+        else if (officialDomain && (linkMismatch = true)) facts.push(`${d} does NOT match ${sender || "the sender"}'s official domain ${officialDomain}.`);
+        else facts.push(`${d}: the sender's official domain could not be confirmed, so this link can't be compared.`);
       }
+      linkCheck = facts.join(" ");
     }
 
     // Fraud-warning page on the official site, and (job offers) the real careers page — both give the agent
@@ -139,7 +163,7 @@ export async function investigate(check: Check, language: string, progress: Prog
     const agentLabel = check.job?.company ? `${check.job.company} careers` : officialDomain;
     let lastStepAt = 0;
     const onStep = (step: string) => {
-      if (Date.now() - lastStepAt < 6000) return;
+      if (Date.now() - lastStepAt < 12_000) return; // edits are scarce (5 per message), spend them slowly
       lastStepAt = Date.now();
       const short = step.replace(/\s+/g, " ").trim();
       void progress(`🧭 ${agentLabel}: ${short.length > 70 ? short.slice(0, 69) + "…" : short}`);
@@ -186,6 +210,7 @@ export async function investigate(check: Check, language: string, progress: Prog
         // Link the careers page itself (not the "closest" posting, which is a different job) and state the finding plainly.
         const url = str(r.careers_page_url) ?? agent.url;
         const found = r.role_found === true;
+        roleMissing = r.role_found === false;
         const lines = [
           `Sage's live check of ${check.job.company}'s official careers page (${url}), searching for "${check.job.role}":`,
           found
@@ -225,7 +250,7 @@ export async function investigate(check: Check, language: string, progress: Prog
   }
 
   await progress("🧠 Weighing the evidence…");
-  const judgement = await judge({ language, check, linkCheck, sources, extraNotes: notes });
+  let judgement = await judge({ language, check, linkCheck, sources, extraNotes: notes });
 
   // The schema enforces English verdict codes; this is the backstop if a model ignores it.
   const VALID = check.type === "scam" ? ["SCAM", "SUSPICIOUS", "CANT_CONFIRM", "LOOKS_REAL"] : ["FALSE", "MISLEADING", "UNVERIFIED", "TRUE"];
@@ -233,6 +258,25 @@ export async function investigate(check: Check, language: string, progress: Prog
     console.warn(`[judge] unexpected verdict "${judgement.verdict}" → ${check.type === "scam" ? "CANT_CONFIRM" : "UNVERIFIED"}`);
     judgement.verdict = check.type === "scam" ? "CANT_CONFIRM" : "UNVERIFIED";
   }
+  // A scam verdict must rest on red flags in this message, not on "scammers often impersonate X" (live testing: a real
+  // Google security alert and a real salon booking came back SUSPICIOUS on generic grounds). The small model doesn't
+  // always obey, so enforce it: drop flags the code can disprove, then require at least one.
+  const verifiable = (j: Judgement) =>
+    (j.red_flags ?? []).filter((f) => (f !== "link_not_official" || linkMismatch) && (f !== "role_not_on_official_site" || roleMissing));
+  const unsupported = (j: Judgement) => (j.verdict === "SCAM" || j.verdict === "SUSPICIOUS") && verifiable(j).length === 0;
+  if (unsupported(judgement)) {
+    // Ask once for a rewrite, so the headline and advice match the honest verdict (not "this might be a trick").
+    console.warn(`[judge] ${judgement.verdict} with no verifiable red flags → asking for a rewrite`);
+    judgement = await judge({
+      language, check, linkCheck, sources,
+      extraNotes: [...notes, `A draft said ${judgement.verdict}, but no specific red flag in this message holds up. Write it as CANT_CONFIRM or LOOKS_REAL, with calm advice to check through the official app/site.`],
+    }).catch(() => judgement);
+    if (unsupported(judgement)) {
+      judgement.verdict = "CANT_CONFIRM";
+      if (judgement.labels) delete judgement.labels.verdict; // its translation was for the old verdict
+    }
+  }
+  judgement.red_flags = verifiable(judgement);
 
   // Never fake a source: keep only citations that point at real fetched/searched items.
   const valid = new Set(sources.map((s) => s.id));

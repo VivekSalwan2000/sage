@@ -49,6 +49,12 @@ const CASES: Case[] = [
     text: "Postes Canada : votre colis est en attente, droits impayés de 1,99 $. Payez sur canadapost-redelivery.info",
     expect: "reply in French",
   },
+  {
+    id: 10,
+    text:
+      "Google — Security alert. You allowed Muse access to some of your Google Account data. If you didn't allow Muse access, someone else may be trying to access your Google Account data. Take a moment now to check your account activity and secure your account. [Check activity]",
+    expect: "🟡/🟢 — real Google alert; no specific red flags (live-test regression)",
+  },
 ];
 
 const wanted = process.argv.slice(2).map(Number).filter(Boolean);

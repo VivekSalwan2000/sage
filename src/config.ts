@@ -24,6 +24,8 @@ export const config = {
   geminiKey: process.env.GEMINI_API_KEY ?? "",
   geminiModel: process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite", // 3.8 Flash free-tier quota is too small (429/504 in testing)
   geminiFallbackModel: process.env.GEMINI_FALLBACK_MODEL ?? "gemini-3.1-flash-lite", // separate quota pool, used on retries
+  // Verdict model. 3.6/3.8 Flash judged better in principle but were overloaded (503/504) in testing, so default to Flash-Lite.
+  geminiJudgeModel: process.env.GEMINI_JUDGE_MODEL ?? process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite",
   geminiTimeoutMs: num("GEMINI_TIMEOUT_MS", 20_000),
 
   dbPath: process.env.SAGE_DB ?? "sage.db",
