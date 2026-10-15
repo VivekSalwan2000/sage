@@ -3,13 +3,15 @@
 //   bun run eval 1 2 3 5    → only those cases
 // Uses live APIs: Search/Fetch are free, Agent runs spend credits (scam cases with an official site).
 
-import { understand } from "../src/brain";
+import { readFileSync } from "node:fs";
+import { understand, type Media } from "../src/brain";
 import { investigate, recover } from "../src/investigate";
 import { verdictMessage, followupMessage, progressDone } from "../src/format";
 
 interface Case {
   id: number;
   text: string;
+  image?: string; // path relative to repo root
   expect: string;
 }
 
@@ -40,6 +42,7 @@ const CASES: Case[] = [
     expect: "🔴 FALSE or 🟠 MISLEADING with fact-check sources",
   },
   { id: 6, text: "I got a weird email", expect: "asks for a screenshot (no check run)" },
+  { id: 7, text: "is this real??", image: "scripts/fixtures/shopify-scam.png", expect: "same as #1 (read from the screenshot)" },
   { id: 8, text: "I already clicked the link and entered my password", expect: "damage-control steps" },
   {
     id: 9,
@@ -56,7 +59,8 @@ for (const c of run) {
   console.log(`\n${"═".repeat(70)}\n#${c.id}  ${c.text}\nexpect: ${c.expect}\n${"─".repeat(70)}`);
   const t0 = Date.now();
   try {
-    const u = await understand({ texts: [c.text], media: [], userName: null, guardian: null, pending: null, history: [], recentChecks: [] });
+    const media: Media[] = c.image ? [{ mimeType: "image/png", base64: readFileSync(c.image).toString("base64") }] : [];
+    const u = await understand({ texts: [c.text], media, userName: null, guardian: null, pending: null, history: [], recentChecks: [] });
     console.log(`[${((Date.now() - t0) / 1000).toFixed(1)}s] intent=${u.intent} lang=${u.language} type=${u.check?.type ?? "-"} sender=${u.check?.claimed_sender ?? "-"} official_guess=${u.check?.official_domain_guess ?? "-"}`);
 
     if (u.intent === "already_clicked") {

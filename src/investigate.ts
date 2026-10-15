@@ -227,6 +227,13 @@ export async function investigate(check: Check, language: string, progress: Prog
   await progress("🧠 Weighing the evidence…");
   const judgement = await judge({ language, check, linkCheck, sources, extraNotes: notes });
 
+  // The schema enforces English verdict codes; this is the backstop if a model ignores it.
+  const VALID = check.type === "scam" ? ["SCAM", "SUSPICIOUS", "CANT_CONFIRM", "LOOKS_REAL"] : ["FALSE", "MISLEADING", "UNVERIFIED", "TRUE"];
+  if (!VALID.includes(judgement.verdict)) {
+    console.warn(`[judge] unexpected verdict "${judgement.verdict}" → ${check.type === "scam" ? "CANT_CONFIRM" : "UNVERIFIED"}`);
+    judgement.verdict = check.type === "scam" ? "CANT_CONFIRM" : "UNVERIFIED";
+  }
+
   // Never fake a source: keep only citations that point at real fetched/searched items.
   const valid = new Set(sources.map((s) => s.id));
   // Strip any "[3]" markers the model wrote into prose — numbering is done in format.ts from source_ids only.

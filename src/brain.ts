@@ -16,7 +16,15 @@ export interface Media {
 // model can last minutes while a user is waiting on their phone. Every attempt has a hard timeout.
 const TRANSIENT = /429|RESOURCE_EXHAUSTED|50\d|UNAVAILABLE|INTERNAL|DOCTYPE|timed? ?out|abort|fetch failed|ECONNRESET|socket|JSON/i;
 
-async function json<T>(system: string, text: string, media: Media[] = [], prefer = config.geminiModel, attempt = 0): Promise<T> {
+interface JsonOpts {
+  media?: Media[];
+  prefer?: string;
+  /** JSON Schema the response must follow (Gemini enforces it, e.g. enum verdicts). */
+  schema?: unknown;
+}
+
+async function json<T>(system: string, text: string, opts: JsonOpts = {}, attempt = 0): Promise<T> {
+  const { media = [], prefer = config.geminiModel, schema } = opts;
   const other = prefer === config.geminiModel ? config.geminiFallbackModel : config.geminiModel;
   const model = attempt % 2 === 0 ? prefer : other;
   try {
@@ -32,6 +40,7 @@ async function json<T>(system: string, text: string, media: Media[] = [], prefer
         systemInstruction: system,
         responseMimeType: "application/json",
         temperature: 0.2,
+        ...(schema ? { responseJsonSchema: schema } : {}),
         httpOptions: { timeout: config.geminiTimeoutMs },
       },
     });
@@ -43,7 +52,7 @@ async function json<T>(system: string, text: string, media: Media[] = [], prefer
       const next = (attempt + 1) % 2 === 0 ? prefer : other;
       console.warn(`[gemini] ${model} failed (${msg.replace(/\s+/g, " ").slice(0, 80)}); retrying with ${next}`);
       await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
-      return json<T>(system, text, media, prefer, attempt + 1);
+      return json<T>(system, text, opts, attempt + 1);
     }
     throw e;
   }
@@ -83,7 +92,7 @@ export interface Understanding {
 }
 
 const UNDERSTAND_SYSTEM = `You are the intake brain of ${config.botName}, an iMessage assistant that checks whether messages are legit.
-Users are mostly students (and their families). They forward suspicious texts, emails, DMs, job/internship offers,
+Users are everyday people of any age — students, workers, parents, grandparents. They forward suspicious texts, emails, DMs, job/internship offers,
 rental listings, WhatsApp forwards, posts, links, screenshots or voice notes.
 
 Return ONLY JSON matching:
@@ -121,7 +130,7 @@ export async function understand(input: {
     `RECENT CONVERSATION:\n${input.history.map((h) => `${h.role}: ${h.text}`).join("\n") || "(new user)"}`,
     `NEW MESSAGE(S):\n${input.texts.join("\n") || "(no text)"}${input.media.length ? `\n[${input.media.length} attachment(s) included: screenshot/photo/voice note]` : ""}`,
   ].join("\n\n");
-  return json<Understanding>(UNDERSTAND_SYSTEM, prompt, input.media);
+  return json<Understanding>(UNDERSTAND_SYSTEM, prompt, { media: input.media });
 }
 
 // ---------- 2. Judge ----------
@@ -143,29 +152,66 @@ export interface Judgement {
   do_now: string[];
   verify_yourself: string[];
   official_contact?: string | null;
+  /** Section headings in the user's language (only filled for non-English). */
+  labels?: Partial<Record<"verdict" | "why" | "do_now" | "verify_yourself" | "sources" | "official_contact", string>>;
 }
 
-const JUDGE_SYSTEM = `You are ${config.botName}'s judge. You write the final verdict sent by iMessage to a student who forwarded something suspicious.
+const str = { type: "string" };
+const strList = { type: "array", items: str };
+// Enforced by Gemini: verdict must be one of the English codes (the code relies on them), text fields are free-form.
+const JUDGEMENT_SCHEMA = {
+  type: "object",
+  properties: {
+    verdict: { type: "string", enum: ["SCAM", "SUSPICIOUS", "CANT_CONFIRM", "LOOKS_REAL", "FALSE", "MISLEADING", "UNVERIFIED", "TRUE"] },
+    headline: str,
+    why: {
+      type: "array",
+      items: { type: "object", properties: { text: str, source_ids: { type: "array", items: { type: "integer" } } }, required: ["text", "source_ids"] },
+    },
+    do_now: strList,
+    verify_yourself: strList,
+    official_contact: { type: ["string", "null"] },
+    labels: {
+      type: "object",
+      properties: { verdict: str, why: str, do_now: str, verify_yourself: str, sources: str, official_contact: str },
+    },
+  },
+  required: ["verdict", "headline", "why", "do_now", "verify_yourself"],
+};
+
+const JUDGE_SYSTEM = `You are ${config.botName}'s judge. You write the final verdict sent by iMessage to someone who forwarded something that feels off.
 You MUST base factual statements only on the numbered SOURCES provided (fetched live from the web) and on what is directly visible in the user's message.
 Every "why" item that relies on outside facts must cite source_ids that exist. Put citations ONLY in source_ids —
 never write "[1]"-style markers inside any text. Never invent a source, URL, phone number or email.
 Only give an official_contact if it appears verbatim in an "official" or "agent" source; otherwise null.
 Sources of kind "agent" are live checks ${config.botName} just ran on the organisation's real website (e.g. searching their careers
-page for the advertised job). They are strong first-hand evidence: when one is relevant, cite it in "why" — e.g. "no such
-role is listed on their real careers page [n]".
+page for the advertised job). They are strong first-hand evidence: when one is relevant, cite it in "why" (e.g. "No such
+role is listed on Shopify's real careers page.").
 
 Verdicts — scam checks: SCAM | SUSPICIOUS | CANT_CONFIRM | LOOKS_REAL. Fact checks: FALSE | MISLEADING | UNVERIFIED | TRUE.
-- Use CANT_CONFIRM/UNVERIFIED when evidence is thin. Being honest beats being confident.
-- LOOKS_REAL never means "safe to click". Even then, tell them to verify through the official app/site typed in themselves.
-- A link whose registrable domain does not match the organisation's official domain is a strong scam signal (LINK CHECK shows this).
+Judge THIS message by its own red flags, not by its topic:
+- Real red flags: a link whose domain is not the organisation's official domain (see LINK CHECK), asking for money, gift cards,
+  passwords, SIN/ID/bank details, or a reply with personal info; pressure or deadlines; a job/prize you never applied for;
+  the claimed role/offer not existing on the real site (agent check); sources reporting this exact wording as a scam.
+- A page saying "scammers impersonate <org>" is NOT evidence that this particular message is fake — real orgs send real messages too.
+- SCAM: two or more strong red flags, or one decisive one (mismatched payment/login link, request for SIN or passwords).
+- SUSPICIOUS: one real red flag but not decisive.
+- LOOKS_REAL: no red flags, nothing to click or pay, and it points the person to the official app/site — but still tell them to
+  check through the official app/site typed in themselves. LOOKS_REAL never means "safe to click"; never write "safe".
+- CANT_CONFIRM / UNVERIFIED: evidence is thin or mixed. Being honest beats being confident.
+- do_now must fit the verdict: don't tell someone to report or block a message that looks real.
 
-Write in the user's language (LANGUAGE). Tone: calm, kind, plain words a grandparent understands. No jargon.
+Write every text field in the user's language (LANGUAGE). Tone: calm, kind, plain words a grandparent understands. No jargon.
+If LANGUAGE is not English, also return "labels" — short translations of these headings for that language:
+verdict (translation of the verdict word for display, e.g. French SCAM → "ARNAQUE"; the "verdict" field itself always stays the English code), why ("Why"), do_now ("Do this now"),
+verify_yourself ("Check it yourself"), sources ("Sources"), official_contact ("Official contact (from their real site)").
 Return ONLY JSON:
 {"verdict":"...","headline":"one sentence, max 18 words",
  "why":[{"text":"max 22 words","source_ids":[1]}],  // 2-3 items
  "do_now":["max 14 words"],                         // 1-3 items, most important first
  "verify_yourself":["max 18 words"],                // 1-2 items: how to check it themselves via official channels
- "official_contact":"..." or null}`;
+ "official_contact":"..." or null,
+ "labels":{"verdict":"...","why":"...","do_now":"...","verify_yourself":"...","sources":"...","official_contact":"..."}}  // labels only if not English`;
 
 export async function judge(input: {
   language: string;
@@ -184,7 +230,7 @@ export async function judge(input: {
     input.extraNotes.length ? `AGENT NOTES:\n${input.extraNotes.join("\n")}` : "",
     `SOURCES:\n${src || "(no sources could be fetched)"}`,
   ].join("\n\n");
-  return json<Judgement>(JUDGE_SYSTEM, prompt);
+  return json<Judgement>(JUDGE_SYSTEM, prompt, { schema: JUDGEMENT_SCHEMA });
 }
 
 // ---------- 3. Damage control ----------

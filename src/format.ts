@@ -16,6 +16,24 @@ const LABELS: Record<Verdict, string> = {
 
 export const isBad = (v: Verdict) => v === "SCAM" || v === "SUSPICIOUS" || v === "FALSE";
 
+const EMOJI: Record<Verdict, string> = {
+  SCAM: "🔴", SUSPICIOUS: "🟠", CANT_CONFIRM: "🟡", LOOKS_REAL: "🟢", FALSE: "🔴", MISLEADING: "🟠", UNVERIFIED: "🟡", TRUE: "🟢",
+};
+
+/** Headings in the user's language when the judge translated them; English otherwise. */
+function labels(inv: Investigation) {
+  const l = inv.judgement.labels ?? {};
+  const v = inv.judgement.verdict;
+  return {
+    verdict: l.verdict ? `${EMOJI[v] ?? ""} ${l.verdict.toUpperCase()}`.trim() : LABELS[v] ?? v,
+    why: l.why || "Why",
+    doNow: l.do_now || "Do this now",
+    verify: l.verify_yourself || "Check it yourself",
+    sources: l.sources || "Sources",
+    contact: l.official_contact || "Official contact (from their real site)",
+  };
+}
+
 const host = (u: string) => {
   try {
     return new URL(u).hostname.replace(/^www\./, "");
@@ -27,12 +45,13 @@ const host = (u: string) => {
 /** Main verdict bubble (markdown → native iMessage bold). */
 export function verdictMessage(inv: Investigation): string {
   const j = inv.judgement;
+  const L = labels(inv);
   const lines: string[] = [];
-  lines.push(`**${LABELS[j.verdict] ?? j.verdict}**`);
+  lines.push(`**${L.verdict}**`);
   lines.push(j.headline);
   if (j.why?.length) {
     lines.push("");
-    lines.push("**Why**");
+    lines.push(`**${L.why}**`);
     for (const w of j.why.slice(0, 3)) {
       const refs = w.source_ids?.length ? ` ${w.source_ids.map((id) => `[${inv.sources.findIndex((s) => s.id === id) + 1}]`).join("")}` : "";
       lines.push(`• ${w.text}${refs}`);
@@ -40,7 +59,7 @@ export function verdictMessage(inv: Investigation): string {
   }
   if (j.do_now?.length) {
     lines.push("");
-    lines.push("**Do this now**");
+    lines.push(`**${L.doNow}**`);
     j.do_now.slice(0, 3).forEach((d, i) => lines.push(`${i + 1}. ${d}`));
   }
   return lines.join("\n");
@@ -49,15 +68,16 @@ export function verdictMessage(inv: Investigation): string {
 /** Second bubble: how to verify it yourself + sources (kept separate so the verdict stays short). */
 export function followupMessage(inv: Investigation): string | null {
   const j = inv.judgement;
+  const L = labels(inv);
   const lines: string[] = [];
   if (j.verify_yourself?.length || j.official_contact) {
-    lines.push("**Check it yourself**");
+    lines.push(`**${L.verify}**`);
     j.verify_yourself?.slice(0, 2).forEach((v) => lines.push(`• ${v}`));
-    if (j.official_contact) lines.push(`• Official contact (from their real site): ${j.official_contact}`);
+    if (j.official_contact) lines.push(`• ${L.contact}: ${j.official_contact}`);
   }
   if (inv.sources.length) {
     if (lines.length) lines.push("");
-    lines.push("**Sources**");
+    lines.push(`**${L.sources}**`);
     inv.sources.slice(0, 4).forEach((s, i) => lines.push(`[${i + 1}] ${host(s.url)} — ${s.url}`));
   }
   return lines.length ? lines.join("\n") : null;
