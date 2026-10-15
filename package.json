@@ -10,6 +10,7 @@
     "terminal": "SAGE_MODE=terminal bun run src/index.ts",
     "check": "bun run scripts/check.ts",
     "smoke": "bun run scripts/smoke.ts",
+    "eval": "bun run scripts/eval.ts",
     "typecheck": "bunx tsc --noEmit"
   },
   "dependencies": {

@@ -12,26 +12,38 @@ export interface Media {
   base64: string;
 }
 
-async function json<T>(system: string, text: string, media: Media[] = [], attempt = 0): Promise<T> {
+// Each call starts on `prefer` and alternates models on retry: a 503 "high demand" or a hung request on one
+// model can last minutes while a user is waiting on their phone. Every attempt has a hard timeout.
+const TRANSIENT = /429|RESOURCE_EXHAUSTED|50\d|UNAVAILABLE|INTERNAL|DOCTYPE|timed? ?out|abort|fetch failed|ECONNRESET|socket|JSON/i;
+
+async function json<T>(system: string, text: string, media: Media[] = [], prefer = config.geminiModel, attempt = 0): Promise<T> {
+  const other = prefer === config.geminiModel ? config.geminiFallbackModel : config.geminiModel;
+  const model = attempt % 2 === 0 ? prefer : other;
   try {
     const res = await ai.models.generateContent({
-      model: config.geminiModel,
+      model,
       contents: [
         {
           role: "user",
           parts: [{ text }, ...media.map((m) => ({ inlineData: { mimeType: m.mimeType, data: m.base64 } }))],
         },
       ],
-      config: { systemInstruction: system, responseMimeType: "application/json", temperature: 0.2 },
+      config: {
+        systemInstruction: system,
+        responseMimeType: "application/json",
+        temperature: 0.2,
+        httpOptions: { timeout: config.geminiTimeoutMs },
+      },
     });
     const raw = (res.text ?? "").trim().replace(/^```json\s*|```$/g, "");
     return JSON.parse(raw) as T;
   } catch (e) {
-    const msg = (e as Error).message ?? "";
-    // Free tier: back off on 429 / transient errors, twice.
-    if (attempt < 2 && /429|RESOURCE_EXHAUSTED|503|UNAVAILABLE|JSON/i.test(msg)) {
-      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1) * (attempt + 1)));
-      return json<T>(system, text, media, attempt + 1);
+    const msg = (e as Error).message ?? String(e);
+    if (attempt < 3 && TRANSIENT.test(msg)) {
+      const next = (attempt + 1) % 2 === 0 ? prefer : other;
+      console.warn(`[gemini] ${model} failed (${msg.replace(/\s+/g, " ").slice(0, 80)}); retrying with ${next}`);
+      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+      return json<T>(system, text, media, prefer, attempt + 1);
     }
     throw e;
   }
@@ -135,8 +147,12 @@ export interface Judgement {
 
 const JUDGE_SYSTEM = `You are ${config.botName}'s judge. You write the final verdict sent by iMessage to a student who forwarded something suspicious.
 You MUST base factual statements only on the numbered SOURCES provided (fetched live from the web) and on what is directly visible in the user's message.
-Every "why" item that relies on outside facts must cite source_ids that exist. Never invent a source, URL, phone number or email.
+Every "why" item that relies on outside facts must cite source_ids that exist. Put citations ONLY in source_ids —
+never write "[1]"-style markers inside any text. Never invent a source, URL, phone number or email.
 Only give an official_contact if it appears verbatim in an "official" or "agent" source; otherwise null.
+Sources of kind "agent" are live checks ${config.botName} just ran on the organisation's real website (e.g. searching their careers
+page for the advertised job). They are strong first-hand evidence: when one is relevant, cite it in "why" — e.g. "no such
+role is listed on their real careers page [n]".
 
 Verdicts — scam checks: SCAM | SUSPICIOUS | CANT_CONFIRM | LOOKS_REAL. Fact checks: FALSE | MISLEADING | UNVERIFIED | TRUE.
 - Use CANT_CONFIRM/UNVERIFIED when evidence is thin. Being honest beats being confident.

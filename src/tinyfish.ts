@@ -86,26 +86,44 @@ export interface AgentOutcome {
   note?: string;
 }
 
-/** Runs a goal on a real website. Capped per day because it spends credits. */
-export async function runAgent(url: string, goal: string, outputSchema?: Record<string, unknown>): Promise<AgentOutcome> {
+/**
+ * Runs a goal on a real website, streaming each step to `onStep` (shown live in the iMessage progress bubble).
+ * Capped per day because it spends credits.
+ */
+export async function runAgent(
+  url: string,
+  goal: string,
+  opts: { maxSeconds?: number; outputSchema?: Record<string, unknown>; onStep?: (step: string) => void } = {},
+): Promise<AgentOutcome> {
+  const maxSeconds = opts.maxSeconds ?? 45;
   if (usageGet("agent_runs") >= config.agentRunsPerDay) {
     return { ok: false, url, result: null, note: "daily agent budget reached" };
   }
   usageInc("agent_runs");
+  console.info(`[tinyfish.agent] start ${url} (max ${maxSeconds}s)`);
+  let stream: Awaited<ReturnType<typeof client.agent.stream>> | undefined;
   try {
     const run = await withTimeout(
-      client.agent.run({
-        url,
-        goal,
-        browser_profile: "lite",
-        agent_config: { max_duration_seconds: 60 }, // custom max_steps needs TinyFish beta access; time cap bounds cost
-        ...(outputSchema ? { output_schema: outputSchema } : {}),
-      } as any),
-      110_000,
+      (async () => {
+        stream = await client.agent.stream({
+          url,
+          goal,
+          browser_profile: "lite",
+          agent_config: { max_duration_seconds: maxSeconds }, // custom max_steps needs TinyFish beta access; time cap bounds cost + latency
+          ...(opts.outputSchema ? { output_schema: opts.outputSchema } : {}),
+        } as any);
+        for await (const ev of stream) {
+          if (ev.type === "PROGRESS" && ev.purpose) opts.onStep?.(ev.purpose);
+          if (ev.type === "COMPLETE") return ev;
+        }
+        throw new Error("agent stream ended without a result");
+      })(),
+      (maxSeconds + 20) * 1000, // grace for the final COMPLETE event, which can lag the last step
       "agent",
     );
+    console.info(`[tinyfish.agent] ${run.status} → ${JSON.stringify(run.result ?? run.error ?? null).slice(0, 300)}`);
     if (run.status !== RunStatus.COMPLETED || !run.result) {
-      return { ok: false, url, result: null, note: (run as any).error?.message ?? run.status };
+      return { ok: false, url, result: null, note: run.error?.message ?? run.status };
     }
     // COMPLETED doesn't guarantee the goal succeeded — check for block signals.
     const flat = JSON.stringify(run.result).toLowerCase();
@@ -115,6 +133,7 @@ export async function runAgent(url: string, goal: string, outputSchema?: Record<
     return { ok: true, url, result: run.result };
   } catch (e) {
     console.warn("[tinyfish.agent] failed:", (e as Error).message);
+    stream?.close().catch(() => {}); // stop listening after a timeout
     return { ok: false, url, result: null, note: (e as Error).message };
   }
 }
