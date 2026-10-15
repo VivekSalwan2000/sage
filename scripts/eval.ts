@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { understand, type Media } from "../src/brain";
 import { investigate, recover } from "../src/investigate";
-import { verdictMessage, followupMessage, progressDone } from "../src/format";
+import { verdictMessage, followupMessage, damageMessage, progressDone } from "../src/format";
 
 interface Case {
   id: number;
@@ -71,7 +71,7 @@ for (const c of run) {
 
     if (u.intent === "already_clicked") {
       const { plan, sources } = await recover(u.check?.summary ?? c.text, u.check?.claimed_sender ?? null, u.language ?? "en");
-      console.log(`\n${plan.headline}\n${plan.steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}\nsources: ${sources.map((s) => s.url).join(", ") || "none"}`);
+      console.log(`\n${damageMessage(plan, sources)}`);
       summary.push(`#${c.id} already_clicked  ${((Date.now() - t0) / 1000).toFixed(1)}s`);
       continue;
     }
@@ -83,8 +83,8 @@ for (const c of run) {
 
     const inv = await investigate(u.check, u.language ?? "en", (l) => console.log(`  … [${((Date.now() - t0) / 1000).toFixed(1)}s] ${l}`));
     const secs = ((Date.now() - t0) / 1000).toFixed(1);
-    console.log(`\n── ${progressDone(inv)} (${secs}s) ──\n\n${verdictMessage(inv)}\n\n${followupMessage(inv) ?? ""}`);
-    summary.push(`#${c.id} ${inv.judgement.verdict.padEnd(12)} ${secs}s  ${inv.sources.length} cited${inv.fromCache ? " (cache)" : ""}`);
+    console.log(`\n── ${progressDone(inv)} (${secs}s) ──\n\n${verdictMessage(inv)}\n\n${followupMessage(inv) ?? ""}\n\n[preview card] ${inv.preview ?? "none"}`);
+    summary.push(`#${c.id} ${inv.judgement.verdict.padEnd(12)} ${secs}s  ${inv.sources.length} cited  flags=${(inv.judgement.red_flags ?? []).join(",") || "-"}${inv.fromCache ? " (cache)" : ""}`);
   } catch (e) {
     console.error(`✗ crashed: ${(e as Error).message}`);
     summary.push(`#${c.id} CRASH  ${(e as Error).message.slice(0, 80)}`);

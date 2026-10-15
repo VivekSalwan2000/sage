@@ -71,6 +71,7 @@ export type Intent =
   | "no"
   | "help"
   | "followup" // a question about the check Sage just did — answered from memory, no new web run
+  | "links" // wants the full source links of the last check
   | "chat";
 
 export interface Understanding {
@@ -93,12 +94,25 @@ export interface Understanding {
   };
 }
 
+// One voice for every word Sage writes. Readers are any age and any comfort level with tech, so: plain words,
+// short lines, no jargon, and none of the tells of AI writing (rules adapted from the "humanizer" skill,
+// which is based on Wikipedia's "Signs of AI writing").
+export const STYLE = `WRITING STYLE (applies to every text you write):
+- Plain words a 12-year-old or a grandparent understands. Short sentences. Calm, warm, confident, never preachy.
+- Say "website" or "website address", never "domain" or "URL". Say "fake message", never "phishing". Never use: spoofed,
+  infrastructure, credentials, authenticate, malware, DKIM, vector, protocol, legitimate (say "real").
+- No dashes of any kind (— – --) inside sentences; use a full stop or comma instead.
+- Never use: crucial, key (as an adjective), robust, delve, highlight, valuable, additionally, ensure, leverage, seamless,
+  "it's important to note", "not just X but Y", "could potentially", "I hope this helps", "let me know".
+- No exclamation marks. No ALL CAPS. No emojis inside your text (the app adds its own).
+- Every item is one short line. Steps start with a verb ("Delete the text", "Call the number on your card").`;
+
 const UNDERSTAND_SYSTEM = `You are the intake brain of ${config.botName}, an iMessage assistant that checks whether messages are legit.
 Users are everyday people of any age — students, workers, parents, grandparents. They forward suspicious texts, emails, DMs, job/internship offers,
 rental listings, WhatsApp forwards, posts, links, screenshots or voice notes.
 
 Return ONLY JSON matching:
-{"intent": "check|need_screenshot|already_clicked|set_name|set_guardian|yes|no|help|followup|chat",
+{"intent": "check|need_screenshot|already_clicked|set_name|set_guardian|yes|no|help|followup|links|chat",
  "language": "en", "reply": "...", "name": "...", "guardian": {"name":"Mom","phone":"+15551234567"},
  "check": {"type":"scam|claim","summary":"...","claimed_sender":"...","official_domain_guess":"...",
            "links":[],"phone_numbers":[],"key_phrase":"...","claim":"...","job":{"company":"...","role":"..."},"red_flags":[]}}
@@ -113,10 +127,13 @@ Rules:
 - "followup" when they ask about a check in RECENT CHECKS without sending anything new to check ("so is it legit?", "why?",
   "are you sure?", "what should I do?"). reply: answer from that check in max 3 short sentences, using its verdict and headline.
   Never change or soften the verdict, and never call anything "safe". If they add genuinely new information, use "check" instead.
+- "links" when they ask for the links or sources of the last check.
 - "help" for "what can you do". "chat" for greetings/thanks/other — reply briefly and steer to what you do.
-- reply must be in the user's language, warm, calm, short (max 2 short sentences), plain text, at most one emoji.
+- reply must be in the user's language, max 2 short sentences, plain text, follows the WRITING STYLE below.
 - If the content contains a password, card or account number, add red flag "contains sensitive info" and do not repeat it anywhere.
-- Never claim anything is safe in reply.`;
+- Never claim anything is safe in reply.
+
+${STYLE}`;
 
 export async function understand(input: {
   texts: string[];
@@ -164,14 +181,15 @@ export type RedFlag = (typeof RED_FLAGS)[number];
 export interface Judgement {
   verdict: Verdict;
   headline: string;
-  why: { text: string; source_ids: number[] }[];
+  /** kind drives the marker: 🚩 red flag, ✅ reassuring, ℹ️ neutral note. */
+  why: { text: string; kind?: "red_flag" | "reassuring" | "note"; source_ids: number[] }[];
   do_now: string[];
   verify_yourself: string[];
   official_contact?: string | null;
   /** Red-flag categories seen in THIS message. SCAM/SUSPICIOUS need at least one that survives code checks. */
   red_flags?: RedFlag[];
   /** Section headings in the user's language (only filled for non-English). */
-  labels?: Partial<Record<"verdict" | "why" | "do_now" | "verify_yourself" | "sources" | "official_contact", string>>;
+  labels?: Partial<Record<"verdict" | "do_now" | "sources" | "more_links", string>>;
 }
 
 const str = { type: "string" };
@@ -184,7 +202,11 @@ const JUDGEMENT_SCHEMA = {
     headline: str,
     why: {
       type: "array",
-      items: { type: "object", properties: { text: str, source_ids: { type: "array", items: { type: "integer" } } }, required: ["text", "source_ids"] },
+      items: {
+        type: "object",
+        properties: { text: str, kind: { type: "string", enum: ["red_flag", "reassuring", "note"] }, source_ids: { type: "array", items: { type: "integer" } } },
+        required: ["text", "kind", "source_ids"],
+      },
     },
     do_now: strList,
     verify_yourself: strList,
@@ -192,7 +214,7 @@ const JUDGEMENT_SCHEMA = {
     red_flags: { type: "array", items: { type: "string", enum: [...RED_FLAGS] } },
     labels: {
       type: "object",
-      properties: { verdict: str, why: str, do_now: str, verify_yourself: str, sources: str, official_contact: str },
+      properties: { verdict: str, do_now: str, sources: str, more_links: str },
     },
   },
   required: ["verdict", "red_flags", "headline", "why", "do_now", "verify_yourself"],
@@ -235,17 +257,20 @@ Judge THIS message by its own red flags, not by its topic:
 - CANT_CONFIRM / UNVERIFIED: evidence is thin or mixed. Being honest beats being confident.
 - do_now must fit the verdict: don't tell someone to report or block a message that looks real.
 
-Write every text field in the user's language (LANGUAGE). Tone: calm, kind, plain words a grandparent understands. No jargon.
-If LANGUAGE is not English, also return "labels" — short translations of these headings for that language:
-verdict (translation of the verdict word for display, e.g. French SCAM → "ARNAQUE"; the "verdict" field itself always stays the English code), why ("Why"), do_now ("Do this now"),
-verify_yourself ("Check it yourself"), sources ("Sources"), official_contact ("Official contact (from their real site)").
+Write every text field in the user's language (LANGUAGE), following the WRITING STYLE.
+If LANGUAGE is not English, also return "labels", short translations for display: verdict (the verdict word, e.g. French
+SCAM → "Arnaque", CANT_CONFIRM → "Impossible à confirmer"; the "verdict" field itself always stays the English code),
+do_now ("What to do"), sources ("Sources"), more_links ('Reply "links" for the full links').
+Keep it short. The whole answer is read on a phone in 10 seconds.
 Return ONLY JSON:
-{"verdict":"...","headline":"one sentence, max 18 words",
- "why":[{"text":"max 22 words","source_ids":[1]}],  // 2-3 items
- "do_now":["max 14 words"],                         // 1-3 items, most important first
- "verify_yourself":["max 18 words"],                // 1-2 items: how to check it themselves via official channels
+{"verdict":"...","headline":"one plain sentence, max 12 words, says what this is",
+ "why":[{"text":"max 12 words","kind":"red_flag|reassuring|note","source_ids":[1]}],  // 2 items, 3 only if needed
+ "do_now":["max 8 words, starts with a verb"],      // 2 different actions, most important first
+ "verify_yourself":["max 12 words"],                // exactly 1, not a repeat of do_now: how to check it themselves via the official app/site
  "official_contact":"..." or null,
- "labels":{"verdict":"...","why":"...","do_now":"...","verify_yourself":"...","sources":"...","official_contact":"..."}}  // labels only if not English`;
+ "labels":{"verdict":"...","do_now":"...","sources":"...","more_links":"..."}}  // labels only if not English
+
+${STYLE}`;
 
 export async function judge(input: {
   language: string;
@@ -273,7 +298,9 @@ export async function judge(input: {
 export async function damageControl(language: string, about: string, sources: Source[]) {
   const system = `You help someone who already clicked/paid/replied to a likely scam. Calm, kind, practical.
 Use only the SOURCES for any org-specific contact details; never invent phone numbers.
-Return ONLY JSON: {"headline":"max 15 words, reassuring","steps":["max 16 words each, 3-5 steps, most urgent first"],"source_ids":[1]}
+Return ONLY JSON: {"headline":"max 10 words, calm and reassuring","steps":["max 10 words, starts with a verb"],"source_ids":[1]}
+3 or 4 steps, most urgent first.
+${STYLE}
 Language: ${language}.`;
   const prompt = `WHAT HAPPENED: ${about}\n\nSOURCES:\n${sources.map((s) => `[${s.id}] ${s.title} ${s.url}\n${s.excerpt}`).join("\n\n")}`;
   return json<{ headline: string; steps: string[]; source_ids: number[] }>(system, prompt);

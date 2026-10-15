@@ -1,6 +1,6 @@
 // Sage — entry point. Photon Spectrum delivers iMessages; this file decides what to do with them.
 
-import { Spectrum, markdown, type Message, type Space } from "spectrum-ts";
+import { Spectrum, markdown, richlink, type Message, type Space } from "spectrum-ts";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,10 +9,10 @@ import { terminal } from "spectrum-ts/providers/terminal";
 import { config, assertConfig } from "./config";
 import { understand, type Media } from "./brain";
 import { investigate, recover } from "./investigate";
-import { verdictMessage, followupMessage, progressDone, ONBOARDING, HELP } from "./format";
+import { verdictMessage, followupMessage, linksMessage, damageMessage, progressDone, ONBOARDING, HELP, COPY } from "./format";
 import {
   getUser, updateUser, getPending, setPending, findUserByGuardianPhone,
-  addTurn, recentTurns, saveCheck, recentChecks, usageGet, usageInc, type User,
+  addTurn, recentTurns, saveCheck, recentChecks, lastCheckSources, usageGet, usageInc, type User,
 } from "./db";
 
 assertConfig();
@@ -31,8 +31,10 @@ const YES = /^(y|yes|yeah|yep|yup|sure|ok|okay|please|do it|go ahead|haan|ha|oui
 const NO = /^(n|no|nope|nah|don'?t|not now|non)\b/i;
 
 async function say(space: Space, userId: string, text: string, md = false) {
-  addTurn(userId, "sage", text);
-  return space.send(md ? markdown(text) : text);
+  // House style: no dashes mid-sentence, even if the model slips one into a free-form reply.
+  const tidy = text.replace(/[ \t]+[—–][ \t]+/g, ", ");
+  addTurn(userId, "sage", tidy);
+  return space.send(md ? markdown(tidy) : tidy);
 }
 
 async function safeReact(message: Message, emoji: string) {
@@ -101,7 +103,7 @@ async function collect(messages: Message[]) {
 }
 
 /** Proactive message to someone (guardian). Asks-before-sending is enforced by callers. */
-async function textNumber(phone: string, text: string): Promise<boolean> {
+async function textNumber(phone: string, text: string, md = false): Promise<boolean> {
   if (config.mode !== "imessage") {
     console.log(`\n[would text ${phone}]: ${text}\n`);
     return true;
@@ -110,7 +112,7 @@ async function textNumber(phone: string, text: string): Promise<boolean> {
     const im = imessage(app as any);
     const user = await im.user(phone);
     const dm = await im.space.create(user);
-    await dm.send(text);
+    await dm.send(md ? markdown(text) : text);
     return true;
   } catch (e) {
     console.warn(`[guardian] could not text ${phone}:`, (e as Error).message);
@@ -131,12 +133,9 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
   if (inviter && texts.length && (YES.test(texts[0]!) || NO.test(texts[0]!))) {
     const accepted = YES.test(texts[0]!);
     updateUser(inviter.id, { guardian_status: accepted ? "confirmed" : null, ...(accepted ? {} : { guardian_phone: null, guardian_name: null }) });
-    await say(space, senderId, accepted
-      ? `Thanks! You're set. I'll only text you when ${inviter.name ?? "they"} asks me to warn you about a scam. 💙`
-      : `No problem — I won't contact you again.`);
-    await textNumber(inviter.id, accepted
-      ? `✅ ${inviter.guardian_name ?? "Your family contact"} accepted. I can now give them a heads-up when you get a scam — I'll always ask you first.`
-      : `${inviter.guardian_name ?? "Your contact"} declined, so I won't message them.`);
+    await say(space, senderId, accepted ? COPY.guardianYes(inviter.name ?? "they") : COPY.guardianNo);
+    const who = inviter.guardian_name ?? "Your family contact";
+    await textNumber(inviter.id, accepted ? COPY.guardianAccepted(who) : COPY.guardianDeclined(who));
     return;
   }
 
@@ -146,13 +145,16 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
   if (!user.onboarded) {
     updateUser(senderId, { onboarded: 1 });
     const onlyHello = media.length === 0 && texts.join(" ").trim().length < 25;
-    await say(space, senderId, ONBOARDING(config.botName));
+    await say(space, senderId, ONBOARDING(config.botName), true);
     if (onlyHello) return;
   }
 
   const pending = getPending(user);
 
-  // 3) Fast path for yes/no to a pending question.
+  // 3) Fast paths: "links" for the last check's full links, and yes/no to a pending question.
+  if (texts.length === 1 && !media.length && /^\s*(links?|sources?|liens?|enlaces?)\s*\??\s*$/i.test(texts[0]!)) {
+    return say(space, senderId, linksMessage(lastCheckSources(senderId).map((url) => ({ url }))), true);
+  }
   if (pending && texts.length === 1 && !media.length && (YES.test(texts[0]!.trim()) || NO.test(texts[0]!.trim()))) {
     await resolvePending(space, user, pending, YES.test(texts[0]!.trim()));
     return;
@@ -173,7 +175,7 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
   } catch (e) {
     console.error("[understand]", e);
     await space.stopTyping().catch(() => {});
-    await say(space, senderId, "Sorry — I'm having trouble reading that right now. Could you try again in a minute?");
+    await say(space, senderId, COPY.cantRead);
     return;
   }
   if (u.language && u.language !== user.language) updateUser(senderId, { language: u.language });
@@ -190,18 +192,21 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
 
     case "set_guardian": {
       if (!u.guardian?.phone || !/^\+\d{10,15}$/.test(u.guardian.phone)) {
-        return say(space, senderId, u.reply ?? "Sure — what's their phone number? (e.g. add my mom +1 905 555 0123)");
+        return say(space, senderId, COPY.askNumber);
       }
-      if (u.guardian.phone === senderId) return say(space, senderId, "That's your own number 🙂 Who should I add?");
+      if (u.guardian.phone === senderId) return say(space, senderId, COPY.ownNumber);
       setPending(senderId, { type: "confirm_guardian", name: u.guardian.name || "your contact", phone: u.guardian.phone });
-      return say(space, senderId, `Just to confirm: I'll text ${u.guardian.name || "them"} at ${u.guardian.phone} to ask if they'd like scam heads-ups from you. Send it? (yes/no)`);
+      return say(space, senderId, COPY.confirmGuardian(u.guardian.name || "them", u.guardian.phone));
     }
 
     case "help":
-      return say(space, senderId, HELP(config.botName));
+      return say(space, senderId, HELP(config.botName), true);
+
+    case "links":
+      return say(space, senderId, linksMessage(lastCheckSources(senderId).map((url) => ({ url }))), true);
 
     case "followup":
-      return say(space, senderId, u.reply ?? "That's my answer from the check above — if you have more details, send them and I'll look again.");
+      return say(space, senderId, u.reply ?? "That's my answer from the check above. Send any new details and I'll look again.");
 
     case "need_screenshot":
     case "chat":
@@ -212,12 +217,10 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
       const about = u.check?.summary ?? texts.join(" ");
       try {
         const { plan, sources } = await space.responding(() => recover(about, u.check?.claimed_sender ?? null, u.language ?? "en"));
-        const body = [`**${plan.headline}**`, "", ...plan.steps.map((s, i) => `${i + 1}. ${s}`)];
-        if (sources.length) body.push("", "**Sources**", ...sources.map((s, i) => `[${i + 1}] ${s.url}`));
-        return say(space, senderId, body.join("\n"), true);
+        return say(space, senderId, damageMessage(plan, sources), true);
       } catch (e) {
         console.error("[recover]", e);
-        return say(space, senderId, "Don't panic. Change the password for that account now, call your bank using the number on your card, and watch your statements. I'm here if you want to talk it through.");
+        return say(space, senderId, COPY.damageFallback, true);
       }
     }
 
@@ -232,7 +235,7 @@ async function runCheck(space: Space, user: User, last: Message, check: NonNulla
   // Rate limit per user/day (protects free tiers + credits).
   const key = `checks:${user.id}`;
   if (usageGet(key) >= config.checksPerUserPerDay) {
-    return say(space, user.id, `You've hit today's limit of ${config.checksPerUserPerDay} checks — I'll be ready again tomorrow. If something's urgent, contact the organisation directly using a number you look up yourself.`);
+    return say(space, user.id, COPY.dailyLimit(config.checksPerUserPerDay));
   }
   usageInc(key);
 
@@ -270,46 +273,42 @@ async function runCheck(space: Space, user: User, last: Message, check: NonNulla
     await say(space, user.id, verdictMessage(inv), true);
     const follow = followupMessage(inv);
     if (follow) await say(space, user.id, follow, true);
+    // One website preview card (title + image) instead of a list of long links. Best-effort.
+    if (inv.preview) await space.send(richlink(inv.preview)).catch((e) => console.warn("[preview]", (e as Error).message));
 
     const j = inv.judgement;
-    const checkId = saveCheck(user.id, check.type, j.verdict, j.headline, check.summary);
+    const checkId = saveCheck(user.id, check.type, j.verdict, j.headline, check.summary, inv.sources.map((s) => s.url));
 
     // The "right moment": only after a clear SCAM verdict, only if a confirmed guardian exists, only with consent.
     // (Not after SUSPICIOUS — in live testing the tip fired on a real salon booking text.)
     if (j.verdict === "SCAM") {
       if (user.guardian_status === "confirmed" && user.guardian_phone) {
-        setPending(user.id, { type: "guardian_alert", checkId, summary: `${check.summary} — ${j.headline}` });
-        await say(space, user.id, `Want me to give ${user.guardian_name ?? "your family contact"} a heads-up so they don't fall for this one? (yes/no)`);
+        setPending(user.id, { type: "guardian_alert", checkId, summary: j.headline });
+        await say(space, user.id, COPY.offerAlert(user.guardian_name ?? "your family contact"));
       } else if (!user.guardian_tip_shown) {
         updateUser(user.id, { guardian_tip_shown: 1 });
-        await say(space, user.id, `Scams like this often go to whole families. Text "add my mom +1…" and next time I can warn them for you (I'll always ask first).`);
+        await say(space, user.id, COPY.guardianTip);
       }
     }
   } catch (e) {
     console.error("[check]", e);
-    await update("⚠️ Couldn't finish the check", true);
-    await say(space, user.id, "I couldn't finish checking that — the web was slow on my end. Until I can: don't click links or call numbers in the message. Go to the company's official app or a site you type in yourself. Try me again in a minute?");
+    await update("⚠️ Couldn't finish this check", true);
+    await say(space, user.id, COPY.checkFailed, true);
   }
 }
 
 async function resolvePending(space: Space, user: User, pending: NonNullable<ReturnType<typeof getPending>>, yes: boolean) {
   setPending(user.id, null);
   if (pending.type === "confirm_guardian") {
-    if (!yes) return say(space, user.id, "Okay, I won't contact them.");
+    if (!yes) return say(space, user.id, COPY.noContact);
     updateUser(user.id, { guardian_name: pending.name, guardian_phone: pending.phone, guardian_status: "invited" });
-    const ok = await textNumber(
-      pending.phone,
-      `Hi! ${user.name ?? "Someone in your family"} uses ${config.botName}, an assistant that checks if texts and emails are scams. They'd like me to give you a heads-up when a scam is going around. Is that okay? Reply YES or NO.`,
-    );
-    return say(space, user.id, ok ? `Sent ✅ I'll let you know when ${pending.name} replies.` : `I couldn't reach ${pending.phone}. Is that number right?`);
+    const ok = await textNumber(pending.phone, COPY.guardianInvite(user.name ?? "Someone in your family", config.botName));
+    return say(space, user.id, ok ? COPY.guardianInviteSent(pending.name) : COPY.guardianUnreachable(pending.phone));
   }
   if (pending.type === "guardian_alert") {
-    if (!yes) return say(space, user.id, "Okay, I won't send anything.");
-    const ok = await textNumber(
-      user.guardian_phone!,
-      `⚠️ Heads-up from ${config.botName} (sent for ${user.name ?? "your family member"}): a scam is going around — ${pending.summary}\nDon't click links or call numbers in messages like this. If unsure, send it to me and I'll check.`,
-    );
-    return say(space, user.id, ok ? `Done — I've warned ${user.guardian_name}. 💙` : `I couldn't reach ${user.guardian_name} just now.`);
+    if (!yes) return say(space, user.id, COPY.noSend);
+    const ok = await textNumber(user.guardian_phone!, COPY.guardianAlert(config.botName, user.name ?? "Your family member", pending.summary), true);
+    return say(space, user.id, ok ? COPY.alertSent(user.guardian_name ?? "them") : COPY.alertFailed(user.guardian_name ?? "them"));
   }
 }
 
@@ -332,7 +331,7 @@ function schedule(senderId: string) {
       await handle(b.space, senderId, b.messages);
     } catch (e) {
       console.error("[handle]", e);
-      await b.space.send("Something went wrong on my side — please try again.").catch(() => {});
+      await b.space.send(COPY.somethingWrong).catch(() => {});
     } finally {
       busy.delete(senderId);
     }

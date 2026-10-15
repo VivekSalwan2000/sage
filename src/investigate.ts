@@ -14,6 +14,10 @@ export interface Investigation {
   sources: Source[]; // only the ones actually cited, in order
   checkedCount: number;
   fromCache: boolean;
+  /** One page worth opening (shown as a website preview card): the official page if we have one. */
+  preview?: string;
+  /** Who the message claims to be from, for labels like "📞 Canada Post: …". */
+  org?: string;
 }
 
 const SOCIAL = /(facebook|instagram|twitter|x\.com|linkedin|reddit|youtube|tiktok|wikipedia|quora|pinterest)\./i;
@@ -79,7 +83,7 @@ export async function investigate(check: Check, language: string, progress: Prog
   const key = hashKey(check, language);
   const cached = cacheGet<Investigation>(key, config.cacheHours);
   if (cached) {
-    await progress("⚡ I've checked this one recently — pulling up what I found…");
+    await progress("⚡ I checked this one recently…");
     return { ...cached, fromCache: true };
   }
 
@@ -96,6 +100,7 @@ export async function investigate(check: Check, language: string, progress: Prog
   };
   const notes: string[] = [];
   let linkCheck = "No links in the message.";
+  let officialSite: string | null = null; // the organisation's confirmed website, for the preview card
   let linkMismatch = false; // set only by the code's own link check — the judge can't claim it otherwise
   let roleMissing = false; // set only when the agent really searched the careers page and found nothing
 
@@ -107,7 +112,7 @@ export async function investigate(check: Check, language: string, progress: Prog
 
     // ── Step 1: SEARCH (parallel): scam reports (by wording, and by the link's domain) + the real organisation's official site.
     // No exact-phrase quotes: scam texts get reworded, and quoted queries mostly return nothing.
-    await progress(`🔎 Searching for reports of this message${sender ? ` and ${sender}'s official site` : ""}…`);
+    await progress("🔎 Looking into this for you…");
     const [byWording, byLink, official] = await Promise.all([
       search(`${sender ? sender + " " : ""}${phrase.slice(0, 100)} scam text`, { purpose: "Find reports that this message is a known scam" }),
       linkDomains.length ? search(`${linkDomains[0]} scam`, { purpose: "Find reports about this suspicious website" }) : Promise.resolve([] as SearchHit[]),
@@ -156,17 +161,20 @@ export async function investigate(check: Check, language: string, progress: Prog
       ...(fraudHits.length ? [] : officialDomain ? [`https://${officialDomain}`] : []),
       ...reports.slice(0, 3).map((h) => h.url),
     ];
-    await progress(`📄 Reading ${officialDomain ? officialDomain + " and " : ""}${toRead.length} live page${toRead.length === 1 ? "" : "s"}…`);
+    officialSite = officialDomain;
+    await progress(`📖 Reading what ${sender || "others"}${sender ? " and others say" : " say"} about this…`);
 
     // ── Step 3: AGENT (in parallel with Fetch): act on the real site.
     // Its live steps go into the progress bubble, throttled so we don't fire a burst of edits at iMessage.
-    const agentLabel = check.job?.company ? `${check.job.company} careers` : officialDomain;
-    let lastStepAt = 0;
-    const onStep = (step: string) => {
-      if (Date.now() - lastStepAt < 12_000) return; // edits are scarce (5 per message), spend them slowly
-      lastStepAt = Date.now();
-      const short = step.replace(/\s+/g, " ").trim();
-      void progress(`🧭 ${agentLabel}: ${short.length > 70 ? short.slice(0, 69) + "…" : short}`);
+    const agentLabel = check.job?.company ? `${check.job.company}'s job listings` : `${sender || officialDomain}'s website`;
+    // The agent's raw steps read like robot logs ("Submit final search results"), so the user sees one calm
+    // "still checking" line once it has been running a while. Edits are scarce (5 per message) anyway.
+    const agentStart = Date.now();
+    let nudged = false;
+    const onStep = (_step: string) => {
+      if (nudged || Date.now() - agentStart < 25_000) return;
+      nudged = true;
+      void progress(`⏳ Still checking ${agentLabel}, almost there…`);
     };
     const agentTask = (() => {
       // No confirmed official site → no agent run (a search-engine start page just hits captchas).
@@ -193,8 +201,8 @@ export async function investigate(check: Check, language: string, progress: Prog
       }
       return Promise.resolve(null);
     })();
-    if (check.job?.company && officialDomain) await progress(`🧭 Checking ${check.job.company}'s real careers page for this role…`);
-    else if (officialDomain) await progress(`🧭 Finding ${officialDomain}'s official way to report this…`);
+    if (check.job?.company && officialDomain) await progress(`🧭 Searching ${check.job.company}'s real job listings…`);
+    else if (officialDomain) await progress(`🧭 Visiting ${sender || officialDomain}'s official website…`);
     else notes.push("The organisation's official website could not be confirmed, so no live site check was done.");
 
     const [pages, agent] = await Promise.all([fetchPages(toRead, "Verify whether a message is a scam and how to report it"), agentTask]);
@@ -237,19 +245,19 @@ export async function investigate(check: Check, language: string, progress: Prog
   } else {
     // ── Fact-check path: SEARCH news + fact-checks → FETCH the best ones
     const claim = check.claim?.trim() || check.summary;
-    await progress("🔎 Searching news and fact-checkers…");
+    await progress("🔎 Looking for news and fact-checks…");
     const [news, factchecks] = await Promise.all([
       search(claim.slice(0, 200), { news: true, purpose: "Find credible news coverage of this claim" }),
       search(`${claim.slice(0, 160)} fact check`, { purpose: "Find fact-checks of this claim" }),
     ]);
     const best = [...factchecks.slice(0, 2), ...news.slice(0, 2)].filter((h) => !SOCIAL.test(h.url));
-    await progress(`📄 Reading ${best.length} source${best.length === 1 ? "" : "s"}…`);
+    await progress(`📖 Reading ${best.length} trusted source${best.length === 1 ? "" : "s"}…`);
     const pages = await fetchPages(best.map((h) => h.url), "Fact-check a claim forwarded on social media");
     for (const p of pages) add({ title: p.title, url: p.url, excerpt: excerpt(p.text), kind: "news" });
     for (const h of [...factchecks, ...news].filter((h) => !SOCIAL.test(h.url)).slice(0, 4)) add({ title: h.title, url: h.url, excerpt: h.snippet, kind: "search" });
   }
 
-  await progress("🧠 Weighing the evidence…");
+  await progress("🧠 Putting it all together…");
   let judgement = await judge({ language, check, linkCheck, sources, extraNotes: notes });
 
   // The schema enforces English verdict codes; this is the backstop if a model ignores it.
@@ -291,7 +299,13 @@ export async function investigate(check: Check, language: string, progress: Prog
     judgement.official_contact = null; // contact must be traceable to the official site
   }
 
-  const result: Investigation = { judgement, sources: citedSources, checkedCount: sources.length, fromCache: false };
+  // The one page to preview: what the agent checked, else the official page we read, else the official homepage.
+  const preview =
+    citedSources.find((s) => s.kind === "agent")?.url ??
+    citedSources.find((s) => s.kind === "official")?.url ??
+    (officialSite ? `https://${officialSite}` : citedSources[0]?.url);
+  const org = check.claimed_sender?.trim() || undefined;
+  const result: Investigation = { judgement, sources: citedSources, checkedCount: sources.length, fromCache: false, preview, org };
   if (sources.length) cacheSet(key, result);
   return result;
 }
