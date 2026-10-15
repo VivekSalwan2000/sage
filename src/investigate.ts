@@ -18,6 +18,8 @@ export interface Investigation {
   preview?: string;
   /** Who the message claims to be from, for labels like "📞 Canada Post: …". */
   org?: string;
+  /** Every page that was searched/read, for when the verdict cites none (so "links" is never empty). */
+  checked?: string[];
 }
 
 const SOCIAL = /(facebook|instagram|twitter|x\.com|linkedin|reddit|youtube|tiktok|wikipedia|quora|pinterest)\./i;
@@ -307,7 +309,8 @@ export async function investigate(check: Check, language: string, progress: Prog
     citedSources.find((s) => s.kind === "official")?.url ??
     (officialSite ? `https://${officialSite}` : citedSources[0]?.url);
   const org = check.claimed_sender?.trim() || undefined;
-  const result: Investigation = { judgement, sources: citedSources, checkedCount: sources.length, fromCache: false, preview, org };
+  const checked = sources.filter((s) => s.kind !== "search").map((s) => s.url).slice(0, 5);
+  const result: Investigation = { judgement, sources: citedSources, checkedCount: sources.length, fromCache: false, preview, org, checked };
   if (sources.length) cacheSet(key, result);
   return result;
 }

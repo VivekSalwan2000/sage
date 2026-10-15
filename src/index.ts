@@ -308,7 +308,8 @@ async function runCheck(space: Space, user: User, last: Message | undefined, che
     if (inv.preview) await send(space, richlink(inv.preview)).catch((e) => console.warn("[preview]", (e as Error).message));
 
     const j = inv.judgement;
-    const checkId = saveCheck(user.id, check.type, j.verdict, j.headline, check.summary, inv.sources.map((s) => s.url));
+    const links = inv.sources.length ? inv.sources.map((s) => s.url) : inv.checked ?? [];
+    const checkId = saveCheck(user.id, check.type, j.verdict, j.headline, check.summary, links);
 
     // The "right moment": only after a clear SCAM verdict, only if a confirmed guardian exists, only with consent.
     // (Not after SUSPICIOUS — in live testing the tip fired on a real salon booking text.)

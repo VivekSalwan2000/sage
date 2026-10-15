@@ -50,6 +50,25 @@ function labels(inv: Investigation) {
   };
 }
 
+/**
+ * Drops a step that mostly repeats an earlier one (live test: "Contact the business directly" followed by
+ * "Call the salon directly using a number you found yourself"). Overlap = shared words of 4+ letters.
+ */
+function distinct(steps: string[]): string[] {
+  const words = (t: string) => new Set(t.toLowerCase().match(/[a-z\u00c0-\u024f]{4,}/g) ?? []);
+  const kept: string[] = [];
+  for (const s of steps) {
+    const w = words(s);
+    const dup = kept.some((k) => {
+      const kw = words(k);
+      const shared = [...w].filter((x) => kw.has(x)).length;
+      return shared >= 2 && shared / Math.min(w.size || 1, kw.size || 1) >= 0.5;
+    });
+    if (!dup) kept.push(s);
+  }
+  return kept;
+}
+
 /** List items read cleaner without a closing full stop. */
 const item = (t: string) => clean(t).replace(/[.。]+$/, "");
 
@@ -80,14 +99,16 @@ export function verdictMessage(inv: Investigation): string {
 export function followupMessage(inv: Investigation): string | null {
   const j = inv.judgement;
   const L = labels(inv);
-  const steps = [...(j.do_now ?? []).slice(0, 2), ...(j.verify_yourself ?? []).slice(0, 1)].map(item).filter(Boolean);
+  const steps = distinct([...(j.do_now ?? []).slice(0, 2), ...(j.verify_yourself ?? []).slice(0, 1)].map(item).filter(Boolean));
   const lines: string[] = [];
   if (steps.length) {
     lines.push(`**${L.doNow}**`);
     steps.forEach((s, i) => lines.push(`${NUM[i]} ${s}`));
   }
   if (j.official_contact) lines.push("", `📞 ${inv.org ? `${inv.org}: ` : ""}${clean(j.official_contact)}`);
-  const sites = [...new Set(inv.sources.map((s) => site(s.url)))].slice(0, 3);
+  // Cited sources; if the verdict cited none, the pages that were actually read (never an empty "links").
+  const urls = inv.sources.length ? inv.sources.map((s) => s.url) : inv.checked ?? [];
+  const sites = [...new Set(urls.map(site))].slice(0, 3);
   if (sites.length) lines.push("", `📚 ${L.sources}: ${sites.join(", ")}`, L.moreLinks);
   return lines.length ? lines.join("\n") : null;
 }

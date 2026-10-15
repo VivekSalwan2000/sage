@@ -271,11 +271,14 @@ If LANGUAGE is not English, also return "labels", short translations for display
 SCAM → "Arnaque", CANT_CONFIRM → "Impossible à confirmer"; the "verdict" field itself always stays the English code),
 do_now ("What to do"), sources ("Sources"), more_links ('Reply "links" for the full links').
 Keep it short. The whole answer is read on a phone in 10 seconds.
+do_now and verify_yourself are shown together as one numbered list, so all 3 must be different actions. Bad: "Contact the
+business directly" then "Call the salon directly". Good: "Check your calendar for a booking", "Don't tap the link if you didn't
+book", "Call the salon using the number on their website".
 Return ONLY JSON:
 {"verdict":"...","headline":"one plain sentence, max 12 words, says what this is",
  "why":[{"text":"max 12 words","kind":"red_flag|reassuring|note","source_ids":[1]}],  // 2 items, 3 only if needed
  "do_now":["max 8 words, starts with a verb"],      // 2 different actions, most important first
- "verify_yourself":["max 12 words"],                // exactly 1, not a repeat of do_now: how to check it themselves via the official app/site
+ "verify_yourself":["max 12 words"],                // exactly 1: how to check it themselves via the official app/site
  "official_contact":"..." or null,
  "labels":{"verdict":"...","do_now":"...","sources":"...","more_links":"..."}}  // labels only if not English
 
