@@ -261,7 +261,9 @@ export async function investigate(check: Check, language: string, progress: Prog
   let judgement = await judge({ language, check, linkCheck, sources, extraNotes: notes });
 
   // The schema enforces English verdict codes; this is the backstop if a model ignores it.
-  const VALID = check.type === "scam" ? ["SCAM", "SUSPICIOUS", "CANT_CONFIRM", "LOOKS_REAL"] : ["FALSE", "MISLEADING", "UNVERIFIED", "TRUE"];
+  // Any of the 8 codes is fine: if intake mis-typed a message as a "claim", the judge's scam-style verdict is still right
+  // (live testing: a real Google email got LOOKS_REAL, which the old per-type check forced to "Unproven").
+  const VALID = ["SCAM", "SUSPICIOUS", "CANT_CONFIRM", "LOOKS_REAL", "FALSE", "MISLEADING", "UNVERIFIED", "TRUE"];
   if (!VALID.includes(judgement.verdict)) {
     console.warn(`[judge] unexpected verdict "${judgement.verdict}" → ${check.type === "scam" ? "CANT_CONFIRM" : "UNVERIFIED"}`);
     judgement.verdict = check.type === "scam" ? "CANT_CONFIRM" : "UNVERIFIED";

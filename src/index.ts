@@ -9,7 +9,7 @@ import { terminal } from "spectrum-ts/providers/terminal";
 import { config, assertConfig } from "./config";
 import { understand, type Media } from "./brain";
 import { investigate, recover } from "./investigate";
-import { verdictMessage, followupMessage, linksMessage, damageMessage, progressDone, ONBOARDING, HELP, COPY } from "./format";
+import { verdictMessage, followupMessage, linksMessage, damageMessage, howToMessage, progressDone, ONBOARDING, HELP, COPY } from "./format";
 import {
   getUser, updateUser, getPending, setPending, findUserByGuardianPhone,
   addTurn, recentTurns, saveCheck, recentChecks, lastCheckSources, usageGet, usageInc, type User,
@@ -27,14 +27,29 @@ console.log(`\n✓ ${config.botName} is running (${config.mode}). Text it someth
 
 // ---------- helpers ----------
 
-const YES = /^(y|yes|yeah|yep|yup|sure|ok|okay|please|do it|go ahead|haan|ha|oui|sí|si)\b/i;
+const YES = /^(y|yes|yeah|yep|yup|sure|ok|okay|please|do it|go ahead|try again|retry|again|haan|ha|oui|sí|si)\b/i;
 const NO = /^(n|no|nope|nah|don'?t|not now|non)\b/i;
+
+// Photon's connection occasionally drops mid-send ("UNAVAILABLE: read ECONNRESET"). In live testing that turned a
+// finished check into "I couldn't finish this check", so sends are retried before giving up.
+const SEND_RETRYABLE = /UNAVAILABLE|ECONNRESET|DEADLINE|timed? ?out|socket|internalError/i;
+async function send(space: Space, content: Parameters<Space["send"]>[0]) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await space.send(content);
+    } catch (e) {
+      if (attempt >= 2 || !SEND_RETRYABLE.test(String((e as Error)?.message ?? e))) throw e;
+      console.warn(`[send] retrying after: ${String((e as Error)?.message ?? e).slice(0, 80)}`);
+      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+    }
+  }
+}
 
 async function say(space: Space, userId: string, text: string, md = false) {
   // House style: no dashes mid-sentence, even if the model slips one into a free-form reply.
   const tidy = text.replace(/[ \t]+[—–][ \t]+/g, ", ");
   addTurn(userId, "sage", tidy);
-  return space.send(md ? markdown(tidy) : tidy);
+  return send(space, md ? markdown(tidy) : tidy);
 }
 
 async function safeReact(message: Message, emoji: string) {
@@ -168,7 +183,13 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
       texts, media,
       userName: user.name,
       guardian: user.guardian_phone ? `${user.guardian_name} (${user.guardian_status})` : null,
-      pending: pending ? (pending.type === "guardian_alert" ? `Want me to warn ${user.guardian_name}?` : `Confirm adding ${pending.name} ${pending.phone} as family contact?`) : null,
+      pending: !pending
+        ? null
+        : pending.type === "guardian_alert"
+          ? `Want me to warn ${user.guardian_name}?`
+          : pending.type === "retry_check"
+            ? "The last check failed. Should I try it again?"
+            : `Confirm adding ${pending.name} ${pending.phone} as family contact?`,
       history: recentTurns(senderId, 10),
       recentChecks: recentChecks(senderId),
     });
@@ -179,6 +200,11 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
     return;
   }
   if (u.language && u.language !== user.language) updateUser(senderId, { language: u.language });
+
+  // A how-to answer ("give me the exact steps") comes back as steps; never start a new web check for it.
+  if (u.steps?.length && !media.length && u.intent !== "already_clicked" && u.intent !== "set_guardian") {
+    return say(space, senderId, howToMessage(u.title, u.reply, u.steps), true);
+  }
 
   switch (u.intent) {
     case "yes":
@@ -206,10 +232,12 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
       return say(space, senderId, linksMessage(lastCheckSources(senderId).map((url) => ({ url }))), true);
 
     case "followup":
+      if (u.steps?.length) return say(space, senderId, howToMessage(u.title, u.reply, u.steps), true);
       return say(space, senderId, u.reply ?? "That's my answer from the check above. Send any new details and I'll look again.");
 
     case "need_screenshot":
     case "chat":
+      if (u.steps?.length) return say(space, senderId, howToMessage(u.title, u.reply, u.steps), true);
       return say(space, senderId, u.reply ?? "Send me the message or a screenshot and I'll check it.");
 
     case "already_clicked": {
@@ -231,7 +259,10 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
   }
 }
 
-async function runCheck(space: Space, user: User, last: Message, check: NonNullable<Awaited<ReturnType<typeof understand>>["check"]>, language: string) {
+type Check = NonNullable<Awaited<ReturnType<typeof understand>>["check"]>;
+
+async function runCheck(space: Space, user: User, last: Message | undefined, check: Check, language: string) {
+  if (getPending(getUser(user.id))?.type === "retry_check") setPending(user.id, null); // a new check replaces an old retry
   // Rate limit per user/day (protects free tiers + credits).
   const key = `checks:${user.id}`;
   if (usageGet(key) >= config.checksPerUserPerDay) {
@@ -239,7 +270,7 @@ async function runCheck(space: Space, user: User, last: Message, check: NonNulla
   }
   usageInc(key);
 
-  await safeReact(last, "‼️"); // instant "got it" — iMessage tapback
+  if (last) await safeReact(last, "‼️"); // instant "got it" — iMessage tapback
   addTurn(user.id, "sage", "(checking…)");
 
   // One progress bubble, edited in place. iMessage allows only 5 edits per message (later ones are silently
@@ -274,7 +305,7 @@ async function runCheck(space: Space, user: User, last: Message, check: NonNulla
     const follow = followupMessage(inv);
     if (follow) await say(space, user.id, follow, true);
     // One website preview card (title + image) instead of a list of long links. Best-effort.
-    if (inv.preview) await space.send(richlink(inv.preview)).catch((e) => console.warn("[preview]", (e as Error).message));
+    if (inv.preview) await send(space, richlink(inv.preview)).catch((e) => console.warn("[preview]", (e as Error).message));
 
     const j = inv.judgement;
     const checkId = saveCheck(user.id, check.type, j.verdict, j.headline, check.summary, inv.sources.map((s) => s.url));
@@ -293,12 +324,17 @@ async function runCheck(space: Space, user: User, last: Message, check: NonNulla
   } catch (e) {
     console.error("[check]", e);
     await update("⚠️ Couldn't finish this check", true);
-    await say(space, user.id, COPY.checkFailed, true);
+    setPending(user.id, { type: "retry_check", check, language }); // "try again" re-runs it without resending
+    await say(space, user.id, COPY.checkFailed, true).catch(() => {});
   }
 }
 
 async function resolvePending(space: Space, user: User, pending: NonNullable<ReturnType<typeof getPending>>, yes: boolean) {
   setPending(user.id, null);
+  if (pending.type === "retry_check") {
+    if (!yes) return say(space, user.id, COPY.noRetry);
+    return runCheck(space, user, undefined, pending.check as Check, pending.language);
+  }
   if (pending.type === "confirm_guardian") {
     if (!yes) return say(space, user.id, COPY.noContact);
     updateUser(user.id, { guardian_name: pending.name, guardian_phone: pending.phone, guardian_status: "invited" });

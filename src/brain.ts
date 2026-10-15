@@ -75,6 +75,9 @@ export type Intent =
   | "chat";
 
 export interface Understanding {
+  /** For how-to answers: a short title and labelled steps (rendered as 1️⃣ 2️⃣ 3️⃣). */
+  title?: string;
+  steps?: string[];
   intent: Intent;
   language: string; // ISO code of the user's language
   reply?: string; // for non-check intents: short, warm reply in the user's language
@@ -113,13 +116,16 @@ rental listings, WhatsApp forwards, posts, links, screenshots or voice notes.
 
 Return ONLY JSON matching:
 {"intent": "check|need_screenshot|already_clicked|set_name|set_guardian|yes|no|help|followup|links|chat",
+ "title": "...", "steps": [],
  "language": "en", "reply": "...", "name": "...", "guardian": {"name":"Mom","phone":"+15551234567"},
  "check": {"type":"scam|claim","summary":"...","claimed_sender":"...","official_domain_guess":"...",
            "links":[],"phone_numbers":[],"key_phrase":"...","claim":"...","job":{"company":"...","role":"..."},"red_flags":[]}}
 
 Rules:
 - "check" when there is content to verify (pasted text, screenshot, link, voice note) OR the description alone is specific enough to research (e.g. "text says CRA owes me $430, click link").
-  type "scam" = messages asking you to do something (click, pay, log in, call, apply, send info). type "claim" = news/facts/rumours/forwards to fact-check.
+  type "scam" = anything someone sent TO the user: a text, email, DM, alert, notice, invoice, booking, offer or call, even if it
+  looks official or harmless. Check whether it is real or a scam. type "claim" = only news stories, rumours, viral forwards or
+  "is it true that..." questions about the world.
 - "need_screenshot" when they describe something vague ("I got a weird email"). reply: ask them to send a screenshot, with simple how-to (iPhone: press side button + volume up; then tap + in Messages and send it). Never ask for passwords or account numbers.
 - "already_clicked" when they say they clicked, paid, replied, or shared info with something suspicious.
 - "set_guardian" when they ask to add/link a family member who should be warned about scams. phone must be E.164 (assume +1 if 10 digits). If no number given, use intent "chat" and ask for it.
@@ -128,6 +134,9 @@ Rules:
   "are you sure?", "what should I do?"). reply: answer from that check in max 3 short sentences, using its verdict and headline.
   Never change or soften the verdict, and never call anything "safe". If they add genuinely new information, use "check" instead.
 - "links" when they ask for the links or sources of the last check.
+- Asking HOW to do something is "followup" (or "chat"), never "check". Answer with "title" (max 6 words) and "steps"
+  (2 to 5 items, max 10 words each, each starts with a verb, name the exact buttons or menus to tap). "reply" is then one
+  short sentence or empty.
 - "help" for "what can you do". "chat" for greetings/thanks/other — reply briefly and steer to what you do.
 - reply must be in the user's language, max 2 short sentences, plain text, follows the WRITING STYLE below.
 - If the content contains a password, card or account number, add red flag "contains sensitive info" and do not repeat it anywhere.

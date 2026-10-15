@@ -135,8 +135,9 @@ export const COPY = {
     "1️⃣ Don't tap links or call numbers in it",
     "2️⃣ Open the official app or website yourself",
     "",
-    "Try me again in a minute.",
+    'Reply "try again" and I\'ll redo it.',
   ].join("\n"),
+  noRetry: "👍 Okay. Send it again any time.",
   dailyLimit: (n: number) =>
     `⏸️ You've used today's ${n} checks. I'll be ready again tomorrow.\nIf it's urgent, call the company using the number on their official website.`,
   somethingWrong: "😕 Something went wrong on my side. Please try again.",
@@ -180,6 +181,14 @@ export const COPY = {
     "3️⃣ Watch your statements for anything odd",
   ].join("\n"),
 };
+
+/** A how-to answer as labelled steps ("How do I check my connected apps?"). */
+export function howToMessage(title: string | undefined, intro: string | undefined, steps: string[]): string {
+  const lines = [`🧭 **${item(title || "Here's how")}**`];
+  if (intro?.trim()) lines.push(clean(intro));
+  steps.slice(0, 5).forEach((s, i) => lines.push(`${NUM[i]} ${item(s)}`));
+  return lines.join("\n");
+}
 
 /** Damage-control steps after "I already clicked". */
 export function damageMessage(plan: { headline: string; steps: string[] }, sources: Pick<Source, "url">[]): string {

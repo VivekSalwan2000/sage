@@ -46,7 +46,8 @@ if (!checkCols.some((c) => c.name === "sources")) db.exec("ALTER TABLE checks AD
 
 export type Pending =
   | { type: "guardian_alert"; checkId: number; summary: string }
-  | { type: "confirm_guardian"; name: string; phone: string };
+  | { type: "confirm_guardian"; name: string; phone: string }
+  | { type: "retry_check"; check: unknown; language: string }; // a check that failed; "try again" re-runs it
 
 export interface User {
   id: string;
