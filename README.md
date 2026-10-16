@@ -16,7 +16,7 @@
 ![Gemini](https://img.shields.io/badge/Reasoning-Gemini-4285F4?style=for-the-badge&logo=googlegemini&logoColor=white)
 ![Bun](https://img.shields.io/badge/Runtime-Bun_+_TypeScript-000000?style=for-the-badge&logo=bun&logoColor=white)
 
-[**How it works**](#-how-a-check-travels) · [**Architecture**](#-system-architecture) · [**Trust model**](#-trust-model) · [**Interactive explorer**](docs/architecture.html) · [**Run it**](#-quick-start)
+[**How it works**](#-how-a-check-travels) · [**Architecture**](#-system-architecture) · [**Trust model**](#-trust-model) · [**Interactive explorer ↗**](https://viveksalwan2000.github.io/sage/architecture.html) · [**Run it**](#-quick-start)
 
 </div>
 
@@ -136,6 +136,8 @@ Students get these near-daily: fake internships and recruiters, *"CRA owes you a
 ---
 
 ## 🏗 System architecture
+
+> 🧭 **Prefer to click through it?** Open the [**interactive system explorer**](https://viveksalwan2000.github.io/sage/architecture.html): play one check step by step with the live path highlighted, or click any component for its role, limits and source file.
 
 ```mermaid
 flowchart TB
@@ -446,7 +448,7 @@ Beyond the test set, Sage was hardened in **real iMessage conversations**: real 
 | **Gemini** | [aistudio.google.com](https://aistudio.google.com) | Free tier |
 
 ```bash
-git clone <this repo> sage && cd sage
+git clone https://github.com/VivekSalwan2000/sage.git && cd sage
 bun install
 cp .env.example .env        # add your keys to .env (never to .env.example)
 bun run smoke               # verify every service (add --agent to test the Agent)
