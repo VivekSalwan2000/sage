@@ -163,6 +163,9 @@ Students get these near-daily: fake internships and recruiters, *"CRA owes you a
 
 </div>
 
+<details>
+<summary><b>🗺️ View the architecture diagram</b></summary>
+
 ```mermaid
 flowchart TB
   phone(["👤 User · iMessage<br/>text · link · screenshot · voice note"])
@@ -205,6 +208,8 @@ flowchart TB
   sched --> photon
 ```
 
+</details>
+
 | Layer | Responsibility | Built with |
 |---|---|---|
 | **Messaging** | Receive and send iMessages, tapbacks, edits, effects, rich links, contact cards | Photon Spectrum (`spectrum-ts`, cloud iMessage) |
@@ -219,6 +224,9 @@ flowchart TB
 ## 🛰 How a check travels
 
 The full path of one message, from the moment it's sent to the moment the family alert card is offered.
+
+<details>
+<summary><b>🛰️ View the step-by-step sequence diagram</b></summary>
 
 ```mermaid
 sequenceDiagram
@@ -272,11 +280,16 @@ sequenceDiagram
   S-->>U: ⚠️ Scam alert card (+ sent to a family contact, if set)
 ```
 
+</details>
+
 **Latency budget.** Understanding takes about 1 to 3 s and the searches 1 to 3 s. Fetch and the Agent run **in parallel**: the Agent gets 35 s for a fraud-reporting check and 75 s for a careers search. Judging takes about 2 to 5 s. A typical check lands in **30 to 90 s**, and the progress bubble shows each stage so the wait never feels silent.
 
 ---
 
 ## 🔬 Investigation pipeline
+
+<details>
+<summary><b>🔬 View the pipeline diagram</b></summary>
 
 ```mermaid
 flowchart TD
@@ -300,6 +313,8 @@ flowchart TD
   O --> P["Verdict + steps + preview + alert card"]
 ```
 
+</details>
+
 Results are **cached for 24 h per message and language**, so a scam forwarded by twenty people is investigated once.
 
 ---
@@ -307,6 +322,9 @@ Results are **cached for 24 h per message and language**, so a scam forwarded by
 ## 🛡 Trust model
 
 Trust is enforced **in code**, not only requested in a prompt. The model proposes; the code verifies.
+
+<details>
+<summary><b>🛡️ View the trust-check flowchart</b></summary>
 
 ```mermaid
 flowchart TD
@@ -326,6 +344,8 @@ flowchart TD
   N1 --> OUT
 ```
 
+</details>
+
 | Guarantee | How it's enforced |
 |---|---|
 | **Never fakes a source** | Citation IDs are validated against what TinyFish returned; sources are deduped, and social posts are never cited |
@@ -338,6 +358,9 @@ flowchart TD
 ---
 
 ## 💬 Conversation lifecycle
+
+<details>
+<summary><b>💬 View the conversation state diagram</b></summary>
 
 ```mermaid
 stateDiagram-v2
@@ -371,11 +394,16 @@ stateDiagram-v2
   CheckIn --> Ready: "done" / "help"
 ```
 
+</details>
+
 **"Texts at the right moment, otherwise stays quiet."** Sage only starts a message itself in two places: the alert-card offer straight after a 🔴 Scam verdict, and one check-in after *"I already clicked"*. Everything else is a reply.
 
 ---
 
 ## 🗄 Data model
+
+<details>
+<summary><b>🗄️ View the data model diagram</b></summary>
 
 ```mermaid
 erDiagram
@@ -420,6 +448,8 @@ erDiagram
     int count
   }
 ```
+
+</details>
 
 ---
 
