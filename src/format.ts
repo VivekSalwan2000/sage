@@ -113,6 +113,26 @@ export function followupMessage(inv: Investigation): string | null {
   return lines.length ? lines.join("\n") : null;
 }
 
+/**
+ * A self-contained scam alert that makes sense out of context: sent straight to a family contact, and given to the
+ * user to forward to anyone else. No links, so it's safe to forward.
+ */
+export function alertCard(inv: Investigation): string {
+  const j = inv.judgement;
+  const flag = (j.why ?? []).find((w) => w.kind !== "reassuring") ?? j.why?.[0];
+  const check = j.verify_yourself?.[0] ?? `Use the official ${inv.org ?? "company"} app or website, typed in yourself`;
+  return [
+    "⚠️ **Scam alert**",
+    item(j.headline),
+    "",
+    ...(flag ? [`🚩 ${item(flag.text)}`] : []),
+    "🚫 Don't tap the link or reply",
+    `🛡️ ${item(check)}`,
+    "",
+    "Checked by Sage",
+  ].join("\n");
+}
+
 /** The full links, only when someone asks for them. */
 export function linksMessage(sources: Pick<Source, "url">[]): string {
   if (!sources.length) return "I don't have links saved for that check. Send the message again and I'll take another look.";
@@ -174,6 +194,8 @@ export const COPY = {
           "🔗 Or the link",
           "",
           "You'll get a clear answer in about a minute.",
+          "",
+          "💾 Here's my contact card, so you'll always know it's me.",
         ].join("\n"),
 
   cantRead: "😕 I couldn't read that one. Try sending it again in a minute.",
@@ -197,11 +219,24 @@ export const COPY = {
   guardianUnreachable: (address: string) => `😕 I couldn't reach ${address}. Is that right, and is it added in Photon?`,
   noContact: "👍 Okay, I won't contact them.",
   noSend: "👍 Okay, I won't send anything.",
-  offerAlert: (name: string) => `👨‍👩‍👧 Want me to warn ${name} about this scam?\nReply yes or no.`,
-  guardianTip:
-    '👨‍👩‍👧 Scams like this often reach family too. Text "add my mom +1 555 123 4567" and I can warn them next time. I\'ll always ask you first.',
-  alertSent: (name: string) => `✅ Done. I've warned ${name}. 💙`,
-  alertFailed: (name: string) => `😕 I couldn't reach ${name} just now.`,
+  offerAlert: (name: string) =>
+    `👨‍👩‍👧 Want me to warn ${name}? I'll text them an alert card and give you a copy to forward to anyone else.\nReply yes or no.`,
+  offerCard: (withTip: boolean) =>
+    [
+      "👨‍👩‍👧 Scams like this often reach family too. Want an alert card you can forward to them?",
+      "Reply yes or no.",
+      ...(withTip ? ["", 'Tip: text "add my mom +1 555 123 4567" and I can send it to them directly next time.'] : []),
+    ].join("\n"),
+  alertSent: (name: string) => `✅ Sent to ${name}. 💙\n↪️ Here's your copy. Press and hold it, then tap Forward to share it with anyone else.`,
+  alertFailed: (name: string) => `😕 I couldn't reach ${name} just now.\n↪️ Here's the alert card. Press and hold it, then tap Forward to send it yourself.`,
+  cardForYou: "↪️ Press and hold the card above, then tap Forward to send it to family or friends.",
+  // check-in after "I already clicked"
+  checkinScheduled: (minutes: number) =>
+    `🕐 I'll check in with you ${minutes >= 60 ? `in about ${Math.round(minutes / 60)} hour${minutes >= 120 ? "s" : ""}` : `in ${minutes} minute${minutes === 1 ? "" : "s"}`} to make sure you're okay.`,
+  checkin: (name: string) =>
+    `👋 Hi ${name}, checking in after that fake message.\nDid you get through the steps I sent?\nReply done, or help if you're stuck.`,
+  checkinDone: "🙌 Great work. You're in a much safer spot now. Send me anything else that feels off.",
+  checkinHelp: (steps: string) => `🫶 No problem, let's finish it together.\n${steps}`,
   guardianInvite: (who: string, bot: string) =>
     [
       `👋 Hi, this is ${bot}, an assistant that checks if texts and emails are scams.`,
@@ -213,15 +248,8 @@ export const COPY = {
   guardianNo: "👍 No problem. I won't contact you again.",
   guardianAccepted: (name: string) => `✅ ${name} said yes. I can now warn them about scams, and I'll always ask you first.`,
   guardianDeclined: (name: string) => `${name} said no, so I won't message them.`,
-  guardianAlert: (bot: string, who: string, headline: string) =>
-    [
-      `⚠️ **Scam alert from ${bot}**`,
-      `${who} asked me to warn you about a scam going around:`,
-      `"${headline}"`,
-      "",
-      "🚫 Don't tap links or call numbers in messages like this.",
-      `🛡️ Not sure about a message? Send it to me and I'll check it.`,
-    ].join("\n"),
+  guardianAlert: (bot: string, who: string, card: string) =>
+    [`👋 ${who} asked me (${bot}) to send you this:`, "", card, "", `Not sure about a message? Send it to me and I'll check it.`].join("\n"),
   damageFallback: [
     "🫶 **Don't worry. Let's fix this now.**",
     "1️⃣ Change that account's password",

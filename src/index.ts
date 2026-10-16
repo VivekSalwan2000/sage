@@ -4,16 +4,17 @@ import { Spectrum, markdown, richlink, type Message, type Space } from "spectrum
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { imessage } from "spectrum-ts/providers/imessage";
+import { imessage, effect, nativeContactCard } from "spectrum-ts/providers/imessage";
 import { terminal } from "spectrum-ts/providers/terminal";
 import { config, assertConfig } from "./config";
 import { understand, extractProfile, type Media } from "./brain";
 import { withCountry } from "./tinyfish";
 import { investigate, recover } from "./investigate";
-import { verdictMessage, followupMessage, linksMessage, damageMessage, howToMessage, progressDone, HELP, COPY } from "./format";
+import { verdictMessage, followupMessage, linksMessage, damageMessage, howToMessage, alertCard, progressDone, NUM, HELP, COPY } from "./format";
 import {
   getUser, updateUser, getPending, setPending, findUserByGuardianPhone,
   addTurn, recentTurns, saveCheck, recentChecks, lastCheckSources, usageGet, usageInc, type User,
+  scheduleFollowup, dueFollowups, markFollowupSent,
 } from "./db";
 
 assertConfig();
@@ -28,8 +29,12 @@ console.log(`\n✓ ${config.botName} is running (${config.mode}). Text it someth
 
 // ---------- helpers ----------
 
-const YES = /^(y|yes|yeah|yep|yup|sure|ok|okay|please|do it|go ahead|try again|retry|again|haan|ha|oui|sí|si)\b/i;
-const NO = /^(n|no|nope|nah|don'?t|not now|non)\b/i;
+const YES = /^(y|yes|yeah|yep|yup|sure|ok|okay|please|do it|go ahead|try again|retry|again|done|all done|fixed|all good|haan|ha|oui|sí|si)\b/i;
+const NO = /^(n|no|nope|nah|don'?t|not now|not yet|help|stuck|non)\b/i;
+
+// iMessage bubble effects, used sparingly: a loud bubble for a scam, a gentle one for good news.
+const FX_LOUD = "com.apple.MobileSMS.expressivesend.loud";
+const FX_GENTLE = "com.apple.MobileSMS.expressivesend.gentle";
 
 // Photon's connection occasionally drops mid-send ("UNAVAILABLE: read ECONNRESET"). In live testing that turned a
 // finished check into "I couldn't finish this check", so sends are retried before giving up.
@@ -46,11 +51,14 @@ async function send(space: Space, content: Parameters<Space["send"]>[0]) {
   }
 }
 
-async function say(space: Space, userId: string, text: string, md = false) {
+async function say(space: Space, userId: string, text: string, md = false, fx?: string) {
   // House style: no dashes mid-sentence, even if the model slips one into a free-form reply.
   const tidy = text.replace(/[ \t]+[—–][ \t]+/g, ", ");
   addTurn(userId, "sage", tidy);
-  return send(space, md ? markdown(tidy) : tidy);
+  const content = md ? markdown(tidy) : tidy;
+  if (!fx) return send(space, content);
+  // Effects are a nicety: if one is rejected, send the plain bubble instead.
+  return send(space, effect(content, fx as Parameters<typeof effect>[1])).catch(() => send(space, content));
 }
 
 async function safeReact(message: Message, emoji: string) {
@@ -191,6 +199,11 @@ async function onboard(space: Space, user: User, texts: string[], hasMedia: bool
     }
     updateUser(user.id, { city: p.city ?? null, country: p.country ?? null, country_code: p.country_code.toUpperCase(), profile_stage: "done" });
     await say(space, user.id, COPY.profileDone(user.name ?? "there", held.has(user.id)), true);
+    // Share Sage's own contact card (name + photo) so it's saved as "Sage", not a number. Best-effort and never
+    // awaited: it's a control signal whose send may not resolve, and onboarding must not hang on it.
+    void Promise.race([send(space, nativeContactCard()), new Promise((r) => setTimeout(r, 5000))]).catch((e) =>
+      console.warn("[contact card]", (e as Error).message),
+    );
     return true;
   }
   return true;
@@ -255,7 +268,11 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
           ? `Want me to warn ${user.guardian_name}?`
           : pending.type === "retry_check"
             ? "The last check failed. Should I try it again?"
-            : `Confirm adding ${pending.name} ${pending.phone} as family contact?`,
+            : pending.type === "share_card"
+              ? "Want an alert card you can forward to family?"
+              : pending.type === "checkin"
+                ? "Did you get through the safety steps Sage sent? (done / help)"
+                : `Confirm adding ${pending.name} ${pending.phone} as family contact?`,
       history: recentTurns(senderId, 10),
       recentChecks: recentChecks(senderId),
       location: [user.city, user.country].filter(Boolean).join(", ") || null,
@@ -268,9 +285,10 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
   }
   if (u.language && u.language !== user.language) updateUser(senderId, { language: u.language });
 
-  // A how-to answer ("give me the exact steps") comes back as steps; never start a new web check for it.
-  if (u.steps?.length && !media.length && u.intent !== "already_clicked" && u.intent !== "set_guardian") {
-    return say(space, senderId, howToMessage(u.title, u.reply, u.steps), true);
+
+  // Content to check always gets a real check, even if the model filed it as a follow-up (a repeated scam text did).
+  if (u.check && (u.intent === "followup" || u.intent === "chat") && (media.length || texts.join(" ").length > 60)) {
+    return runCheck(space, user, last, u.check, u.language ?? "en");
   }
 
   switch (u.intent) {
@@ -314,10 +332,12 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
         const { plan, sources } = await space.responding(() =>
           withCountry(user.country_code, () => recover(about, u.check?.claimed_sender ?? null, u.language ?? "en", user.country ?? "Canada")),
         );
-        return say(space, senderId, damageMessage(plan, sources), true);
+        await say(space, senderId, damageMessage(plan, sources), true);
+        return scheduleCheckin(space, user, plan.steps.slice(0, 4).map((st, i) => `${NUM[i]} ${st.trim().replace(/\.+$/, "")}`).join("\n"));
       } catch (e) {
         console.error("[recover]", e);
-        return say(space, senderId, COPY.damageFallback, true);
+        await say(space, senderId, COPY.damageFallback, true);
+        return scheduleCheckin(space, user, COPY.damageFallback.split("\n").slice(1).join("\n"));
       }
     }
 
@@ -373,7 +393,8 @@ async function runCheck(space: Space, user: User, last: Message | undefined, che
   try {
     const inv = await space.responding(() => withCountry(user.country_code, () => investigate(check, language, progress)));
     await update(progressDone(inv), true);
-    await say(space, user.id, verdictMessage(inv), true);
+    const v = inv.judgement.verdict;
+    await say(space, user.id, verdictMessage(inv), true, v === "SCAM" || v === "FALSE" ? FX_LOUD : v === "LOOKS_REAL" || v === "TRUE" ? FX_GENTLE : undefined);
     const follow = followupMessage(inv);
     if (follow) await say(space, user.id, follow, true);
     // One website preview card (title + image) instead of a list of long links. Best-effort.
@@ -386,13 +407,17 @@ async function runCheck(space: Space, user: User, last: Message | undefined, che
 
     // The "right moment": only after a clear SCAM verdict, only if a confirmed guardian exists, only with consent.
     // (Not after SUSPICIOUS — in live testing the tip fired on a real salon booking text.)
+    // Either way the user gets an alert card: sent straight to their family contact (if they have one) plus a copy
+    // to forward, or just the forwardable card. Nothing is sent to anyone until they say yes.
     if (j.verdict === "SCAM") {
+      const card = alertCard(inv);
       if (user.guardian_status === "confirmed" && user.guardian_phone) {
-        setPending(user.id, { type: "guardian_alert", checkId, summary: j.headline });
+        setPending(user.id, { type: "guardian_alert", checkId, summary: j.headline, card });
         await say(space, user.id, COPY.offerAlert(user.guardian_name ?? "your family contact"));
-      } else if (!user.guardian_tip_shown) {
-        updateUser(user.id, { guardian_tip_shown: 1 });
-        await say(space, user.id, COPY.guardianTip);
+      } else {
+        setPending(user.id, { type: "share_card", card });
+        await say(space, user.id, COPY.offerCard(!user.guardian_tip_shown));
+        if (!user.guardian_tip_shown) updateUser(user.id, { guardian_tip_shown: 1 });
       }
     }
   } catch (e) {
@@ -419,10 +444,42 @@ async function resolvePending(space: Space, user: User, pending: NonNullable<Ret
   }
   if (pending.type === "guardian_alert") {
     if (!yes) return say(space, user.id, COPY.noSend);
-    const ok = await textNumber(user.guardian_phone!, COPY.guardianAlert(config.botName, user.name ?? "Your family member", pending.summary), true);
-    return say(space, user.id, ok ? COPY.alertSent(user.guardian_name ?? "them") : COPY.alertFailed(user.guardian_name ?? "them"));
+    const card = pending.card ?? `⚠️ **Scam alert**\n${pending.summary}`;
+    const ok = await textNumber(user.guardian_phone!, COPY.guardianAlert(config.botName, user.name ?? "Your family member", card), true);
+    await say(space, user.id, ok ? COPY.alertSent(user.guardian_name ?? "them") : COPY.alertFailed(user.guardian_name ?? "them"));
+    return say(space, user.id, card, true); // their own copy, to forward to anyone else
+  }
+  if (pending.type === "share_card") {
+    if (!yes) return say(space, user.id, COPY.noSend);
+    await say(space, user.id, pending.card, true);
+    return say(space, user.id, COPY.cardForYou);
+  }
+  if (pending.type === "checkin") {
+    return say(space, user.id, yes ? COPY.checkinDone : COPY.checkinHelp(pending.steps));
   }
 }
+
+// ---------- check-in after "I already clicked" ----------
+
+/** One follow-up later ("did you change your password?"), saved in the database so it survives a restart. */
+async function scheduleCheckin(space: Space, user: User, steps: string) {
+  scheduleFollowup(user.id, config.checkinMinutes, "checkin", { steps });
+  return say(space, user.id, COPY.checkinScheduled(config.checkinMinutes));
+}
+
+// Every 20 s, send any check-ins that are due, in the user's existing chat. One message each, never repeated.
+setInterval(async () => {
+  for (const f of dueFollowups()) {
+    markFollowupSent(f.id); // first, so a slow send can never double-fire
+    const user = getUser(f.user_id);
+    const { steps } = JSON.parse(f.payload ?? "{}") as { steps?: string };
+    const ok = await textNumber(f.user_id, COPY.checkin(user.name ?? "there"));
+    if (ok) {
+      setPending(f.user_id, { type: "checkin", steps: steps ?? "" });
+      addTurn(f.user_id, "sage", COPY.checkin(user.name ?? "there"));
+    }
+  }
+}, 20_000);
 
 // ---------- inbound loop with burst debouncing ----------
 // Users often send "look at this" + a screenshot as separate messages; wait briefly and handle them together.

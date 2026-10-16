@@ -38,6 +38,9 @@ export const config = {
   // Demo mode: if set, only these numbers get answers (E.164, comma-separated).
   allowlist: list("ALLOWLIST"),
 
+  // After "I already clicked", Sage checks in once this many minutes later (set 1 for a demo).
+  checkinMinutes: num("CHECKIN_MINUTES", 60),
+
   // How long to wait for more messages in a burst ("describe it" + screenshot) before acting.
   debounceMs: num("DEBOUNCE_MS", 3500),
 };

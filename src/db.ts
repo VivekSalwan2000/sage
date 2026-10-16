@@ -39,6 +39,10 @@ CREATE TABLE IF NOT EXISTS checks (
 CREATE TABLE IF NOT EXISTS cache (
   key TEXT PRIMARY KEY, value TEXT, created_at INTEGER DEFAULT (unixepoch())
 );
+CREATE TABLE IF NOT EXISTS followups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT, due_at INTEGER, kind TEXT, payload TEXT, sent INTEGER DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS usage (
   day TEXT, key TEXT, count INTEGER DEFAULT 0, PRIMARY KEY (day, key)
 );
@@ -53,7 +57,9 @@ const checkCols = db.query("PRAGMA table_info(checks)").all() as { name: string 
 if (!checkCols.some((c) => c.name === "sources")) db.exec("ALTER TABLE checks ADD COLUMN sources TEXT");
 
 export type Pending =
-  | { type: "guardian_alert"; checkId: number; summary: string }
+  | { type: "guardian_alert"; checkId: number; summary: string; card?: string } // offer to text the family contact
+  | { type: "share_card"; card: string } // offer a forwardable alert card (no family contact set)
+  | { type: "checkin"; steps: string } // a later "did you fix it?" check-in is waiting on an answer
   | { type: "confirm_guardian"; name: string; phone: string }
   | { type: "retry_check"; check: unknown; language: string }; // a check that failed; "try again" re-runs it
 
@@ -148,4 +154,15 @@ export function usageGet(key: string): number {
 }
 export function usageInc(key: string) {
   db.query("INSERT INTO usage (day, key, count) VALUES (?, ?, 1) ON CONFLICT(day, key) DO UPDATE SET count = count + 1").run(today(), key);
+}
+
+// One-off follow-ups ("did you change your password?"), stored so they survive a restart.
+export function scheduleFollowup(userId: string, minutes: number, kind: string, payload: unknown) {
+  db.query("INSERT INTO followups (user_id, due_at, kind, payload) VALUES (?, unixepoch() + ?, ?, ?)").run(userId, Math.round(minutes * 60), kind, JSON.stringify(payload));
+}
+export function dueFollowups(): { id: number; user_id: string; kind: string; payload: string }[] {
+  return db.query("SELECT id, user_id, kind, payload FROM followups WHERE sent = 0 AND due_at <= unixepoch() ORDER BY id").all() as any[];
+}
+export function markFollowupSent(id: number) {
+  db.query("UPDATE followups SET sent = 1 WHERE id = ?").run(id);
 }

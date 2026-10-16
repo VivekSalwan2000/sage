@@ -132,6 +132,8 @@ Rules:
   address: a phone number in E.164 (assume +1 if 10 digits) or an email address exactly as given. If neither is given, use
   intent "chat" and ask for it.
 - "yes"/"no" when the message is just answering a yes/no question the assistant asked (see PENDING).
+- A pasted/forwarded message, screenshot or link is ALWAYS "check" (with a filled "check" object), even if the same message
+  was checked before. "followup" is only for questions ABOUT a check.
 - "followup" when they ask about a check in RECENT CHECKS without sending anything new to check ("so is it legit?", "why?",
   "are you sure?", "what should I do?"). reply: answer from that check in max 3 short sentences, using its verdict and headline.
   Never change or soften the verdict, and never call anything "safe". If they add genuinely new information, use "check" instead.
