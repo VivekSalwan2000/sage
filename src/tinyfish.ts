@@ -3,6 +3,7 @@
 //   Fetch  — read the actual pages (official fraud warnings, news, fact-checks)
 //   Agent  — multi-step browsing on the real site: does this job exist? where do I report this?
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { TinyFish, RunStatus } from "@tiny-fish/sdk";
 import { config } from "./config";
 import { usageGet, usageInc } from "./db";
@@ -15,6 +16,12 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
     new Promise<T>((_, rej) => setTimeout(() => rej(new Error(`${label} timed out after ${ms}ms`)), ms)),
   ]);
 }
+
+// The person's country (from their profile) for every search made while handling their check, so a CRA text is
+// searched in Canada and an IRS text in the US — without threading it through every function.
+const searchCountry = new AsyncLocalStorage<string>();
+export const withCountry = <T>(countryCode: string | null | undefined, fn: () => Promise<T>) =>
+  searchCountry.run((countryCode || "CA").toUpperCase(), fn);
 
 export interface SearchHit {
   title: string;
@@ -30,7 +37,7 @@ export async function search(query: string, opts: { purpose?: string; news?: boo
       client.search.query({
         query,
         purpose: opts.purpose,
-        location: "CA",
+        location: searchCountry.getStore() ?? "CA",
         language: "en",
         domain_type: opts.news ? "news" : "web",
         include_domains: opts.includeDomains?.length ? opts.includeDomains.join(",") : undefined,

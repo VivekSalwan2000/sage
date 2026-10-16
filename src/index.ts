@@ -7,9 +7,10 @@ import { join } from "node:path";
 import { imessage } from "spectrum-ts/providers/imessage";
 import { terminal } from "spectrum-ts/providers/terminal";
 import { config, assertConfig } from "./config";
-import { understand, type Media } from "./brain";
+import { understand, extractProfile, type Media } from "./brain";
+import { withCountry } from "./tinyfish";
 import { investigate, recover } from "./investigate";
-import { verdictMessage, followupMessage, linksMessage, damageMessage, howToMessage, progressDone, ONBOARDING, HELP, COPY } from "./format";
+import { verdictMessage, followupMessage, linksMessage, damageMessage, howToMessage, progressDone, HELP, COPY } from "./format";
 import {
   getUser, updateUser, getPending, setPending, findUserByGuardianPhone,
   addTurn, recentTurns, saveCheck, recentChecks, lastCheckSources, usageGet, usageInc, type User,
@@ -135,6 +136,61 @@ async function textNumber(phone: string, text: string, md = false): Promise<bool
   }
 }
 
+// ---------- first contact: build a profile before helping ----------
+
+// A message sent before the profile was finished (often the scam itself). Memory only: screenshots are never stored.
+const held = new Map<string, Message[]>();
+
+/**
+ * Two short questions on first contact: first name, then city and country (the country localises every web search,
+ * e.g. CRA vs IRS). Nothing sensitive is asked. Returns true once the profile is complete.
+ */
+async function onboard(space: Space, user: User, texts: string[], hasMedia: boolean, messages: Message[]): Promise<boolean> {
+  const text = texts.join(" ").trim();
+  const looksLikeContent = hasMedia || text.length > 60; // a pasted message or screenshot, not an answer
+
+  if (!user.profile_stage) {
+    const justHello = !hasMedia && text.length < 25;
+    if (!justHello) held.set(user.id, messages);
+    updateUser(user.id, { profile_stage: "name", onboarded: 1 });
+    await say(space, user.id, COPY.welcomeAskName(config.botName, !justHello), true);
+    return false;
+  }
+
+  if (user.profile_stage === "name") {
+    if (looksLikeContent) {
+      held.set(user.id, messages);
+      await say(space, user.id, COPY.holdAndAskName);
+      return false;
+    }
+    const p = await extractProfile("name", text).catch(() => ({ name: null }));
+    if (!p.name) {
+      await say(space, user.id, COPY.askNameAgain);
+      return false;
+    }
+    updateUser(user.id, { name: p.name, profile_stage: "location" });
+    await say(space, user.id, COPY.askLocation(p.name));
+    return false;
+  }
+
+  if (user.profile_stage === "location") {
+    if (looksLikeContent) {
+      held.set(user.id, messages);
+      await say(space, user.id, COPY.holdAndAskLocation);
+      return false;
+    }
+    const p = await extractProfile("location", text).catch(() => ({ city: null, country: null, country_code: null }));
+    if (!p.country_code || !/^[A-Za-z]{2}$/.test(p.country_code)) {
+      await say(space, user.id, COPY.askLocationAgain);
+      return false;
+    }
+    updateUser(user.id, { city: p.city ?? null, country: p.country ?? null, country_code: p.country_code.toUpperCase(), profile_stage: "done" });
+    await say(space, user.id, COPY.profileDone(user.name ?? "there", held.has(user.id)), true);
+    return true;
+  }
+  return true;
+}
+
 // ---------- the brain of a turn ----------
 
 async function handle(space: Space, senderId: string, messages: Message[]) {
@@ -148,7 +204,7 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
   if (inviter && texts.length && (YES.test(texts[0]!) || NO.test(texts[0]!))) {
     const accepted = YES.test(texts[0]!);
     updateUser(inviter.id, { guardian_status: accepted ? "confirmed" : null, ...(accepted ? {} : { guardian_phone: null, guardian_name: null }) });
-    await say(space, senderId, accepted ? COPY.guardianYes(inviter.name ?? "they") : COPY.guardianNo);
+    await say(space, senderId, accepted ? COPY.guardianYes(inviter.name ?? "your family member") : COPY.guardianNo);
     const who = inviter.guardian_name ?? "Your family contact";
     await textNumber(inviter.id, accepted ? COPY.guardianAccepted(who) : COPY.guardianDeclined(who));
     return;
@@ -156,12 +212,15 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
 
   let user = getUser(senderId);
 
-  // 2) First time: welcome + save the contact card vibe.
-  if (!user.onboarded) {
-    updateUser(senderId, { onboarded: 1 });
-    const onlyHello = media.length === 0 && texts.join(" ").trim().length < 25;
-    await say(space, senderId, ONBOARDING(config.botName), true);
-    if (onlyHello) return;
+  // 2) Profile first: Sage learns who it's helping (first name, city and country) before any check.
+  if (user.profile_stage !== "done") {
+    const finished = await onboard(space, user, texts, media.length > 0, messages);
+    if (!finished) return;
+    // Anything they sent before finishing (e.g. the scam itself) is checked now.
+    const waiting = held.get(senderId);
+    held.delete(senderId);
+    if (waiting?.length) return handle(space, senderId, waiting);
+    return;
   }
 
   const pending = getPending(user);
@@ -192,6 +251,7 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
             : `Confirm adding ${pending.name} ${pending.phone} as family contact?`,
       history: recentTurns(senderId, 10),
       recentChecks: recentChecks(senderId),
+      location: [user.city, user.country].filter(Boolean).join(", ") || null,
     });
   } catch (e) {
     console.error("[understand]", e);
@@ -244,7 +304,9 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
       await safeReact(last, "❤️");
       const about = u.check?.summary ?? texts.join(" ");
       try {
-        const { plan, sources } = await space.responding(() => recover(about, u.check?.claimed_sender ?? null, u.language ?? "en"));
+        const { plan, sources } = await space.responding(() =>
+          withCountry(user.country_code, () => recover(about, u.check?.claimed_sender ?? null, u.language ?? "en", user.country ?? "Canada")),
+        );
         return say(space, senderId, damageMessage(plan, sources), true);
       } catch (e) {
         console.error("[recover]", e);
@@ -299,7 +361,7 @@ async function runCheck(space: Space, user: User, last: Message | undefined, che
   const progress = (line: string) => update(line);
 
   try {
-    const inv = await space.responding(() => investigate(check, language, progress));
+    const inv = await space.responding(() => withCountry(user.country_code, () => investigate(check, language, progress)));
     await update(progressDone(inv), true);
     await say(space, user.id, verdictMessage(inv), true);
     const follow = followupMessage(inv);
@@ -339,7 +401,9 @@ async function resolvePending(space: Space, user: User, pending: NonNullable<Ret
   if (pending.type === "confirm_guardian") {
     if (!yes) return say(space, user.id, COPY.noContact);
     updateUser(user.id, { guardian_name: pending.name, guardian_phone: pending.phone, guardian_status: "invited" });
-    const ok = await textNumber(pending.phone, COPY.guardianInvite(user.name ?? "Someone in your family", config.botName));
+    // The guardian must know who's asking: the user's name if Sage knows it, else the last digits of their number.
+    const who = user.name ?? `Someone texting from a number ending in ${user.id.replace(/\D/g, "").slice(-4)}`;
+    const ok = await textNumber(pending.phone, COPY.guardianInvite(who, config.botName));
     return say(space, user.id, ok ? COPY.guardianInviteSent(pending.name) : COPY.guardianUnreachable(pending.phone));
   }
   if (pending.type === "guardian_alert") {

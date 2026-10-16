@@ -147,6 +147,7 @@ ${STYLE}`;
 export async function understand(input: {
   texts: string[];
   media: Media[];
+  location?: string | null;
   userName: string | null;
   guardian: string | null;
   pending: string | null;
@@ -155,6 +156,7 @@ export async function understand(input: {
 }): Promise<Understanding> {
   const prompt = [
     `USER NAME: ${input.userName ?? "unknown"}`,
+    `USER LOCATION: ${input.location ?? "unknown"} (use it to pick the right local organisation and official website)`,
     `FAMILY CONTACT: ${input.guardian ?? "none"}`,
     `PENDING QUESTION SAGE ASKED: ${input.pending ?? "none"}`,
     `RECENT CHECKS (newest first): ${input.recentChecks.map((c) => `[${c.verdict}] ${c.about} → ${c.headline}`).join(" | ") || "none"}`,
@@ -316,4 +318,35 @@ ${STYLE}
 Language: ${language}.`;
   const prompt = `WHAT HAPPENED: ${about}\n\nSOURCES:\n${sources.map((s) => `[${s.id}] ${s.title} ${s.url}\n${s.excerpt}`).join("\n\n")}`;
   return json<{ headline: string; steps: string[]; source_ids: number[] }>(system, prompt);
+}
+
+// ---------- 4. Profile (first-contact questions) ----------
+
+export interface Profile {
+  name?: string | null;
+  city?: string | null;
+  country?: string | null;
+  country_code?: string | null;
+}
+
+const PROFILE_SCHEMA = {
+  name: { type: "object", properties: { name: { type: ["string", "null"] } }, required: ["name"] },
+  location: {
+    type: "object",
+    properties: { city: { type: ["string", "null"] }, country: { type: ["string", "null"] }, country_code: { type: ["string", "null"] } },
+    required: ["city", "country", "country_code"],
+  },
+};
+
+/** Pulls the answer to one onboarding question out of a free-form reply ("I'm Vivek", "toronto canada"). */
+export async function extractProfile(field: "name" | "location", text: string): Promise<Profile> {
+  const system =
+    field === "name"
+      ? `Extract the first name this person wants to be called from their reply to "What's your first name?".
+Capitalise it normally. If the reply has no name (e.g. a question, a refusal, or a pasted message), return null.
+Return ONLY JSON: {"name": "..." or null}`
+      : `Extract where this person lives from their reply to "Which city and country are you in?".
+Fill country from the city if it's obvious (Toronto → Canada). country_code is the ISO 3166-1 alpha-2 code (CA, US, GB, IN...).
+Use null for anything not given. Return ONLY JSON: {"city": "..." or null, "country": "..." or null, "country_code": "..." or null}`;
+  return json<Profile>(system, `REPLY: ${text.slice(0, 300)}`, { schema: PROFILE_SCHEMA[field], temperature: 0 });
 }

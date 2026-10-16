@@ -19,6 +19,10 @@ CREATE TABLE IF NOT EXISTS users (
   onboarded INTEGER DEFAULT 0,
   guardian_tip_shown INTEGER DEFAULT 0,
   pending TEXT,                      -- JSON: a yes/no question Sage is waiting on
+  city TEXT,
+  country TEXT,
+  country_code TEXT,                 -- ISO 3166-1 alpha-2, used to localise web searches
+  profile_stage TEXT,                -- NULL (new) | 'name' | 'location' | 'done'
   created_at INTEGER DEFAULT (unixepoch())
 );
 CREATE TABLE IF NOT EXISTS turns (
@@ -40,7 +44,11 @@ CREATE TABLE IF NOT EXISTS usage (
 );
 `);
 
-// Migration for databases created before the sources column existed.
+// Migrations for databases created before these columns existed.
+const userCols = (db.query("PRAGMA table_info(users)").all() as { name: string }[]).map((c) => c.name);
+for (const col of ["city", "country", "country_code", "profile_stage"]) {
+  if (!userCols.includes(col)) db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`);
+}
 const checkCols = db.query("PRAGMA table_info(checks)").all() as { name: string }[];
 if (!checkCols.some((c) => c.name === "sources")) db.exec("ALTER TABLE checks ADD COLUMN sources TEXT");
 
@@ -59,6 +67,10 @@ export interface User {
   onboarded: number;
   guardian_tip_shown: number;
   pending: string | null;
+  city: string | null;
+  country: string | null;
+  country_code: string | null;
+  profile_stage: string | null;
 }
 
 export function getUser(id: string): User {

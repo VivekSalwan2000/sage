@@ -149,6 +149,33 @@ export const HELP = (name: string) =>
   ].join("\n");
 
 export const COPY = {
+  // first contact
+  welcomeAskName: (bot: string, holding: boolean) =>
+    [
+      `👋 Hi, I'm ${bot}. I check texts, emails and offers that feel off, using the live web.`,
+      holding ? "I'll look at what you sent in a moment. First, two quick questions so I can help you properly." : "Two quick questions so I can help you properly.",
+      "",
+      "1️⃣ What's your first name?",
+    ].join("\n"),
+  askNameAgain: "🙂 What first name should I call you?",
+  holdAndAskName: "📥 Got it, I'll check that next. First, what's your first name?",
+  askLocation: (name: string) => `Nice to meet you, ${name} 🙂\n2️⃣ Which city and country are you in? It helps me check the right official websites.`,
+  askLocationAgain: "📍 Which city and country are you in? For example: Toronto, Canada",
+  holdAndAskLocation: "📥 Got it, I'll check that next. Which city and country are you in?",
+  profileDone: (name: string, holding: boolean) =>
+    holding
+      ? `✅ You're all set, ${name}. Checking what you sent now.`
+      : [
+          `✅ You're all set, ${name}.`,
+          "Whenever something feels off, send it to me:",
+          "",
+          "📸 A screenshot",
+          "💬 The message itself",
+          "🔗 Or the link",
+          "",
+          "You'll get a clear answer in about a minute.",
+        ].join("\n"),
+
   cantRead: "😕 I couldn't read that one. Try sending it again in a minute.",
   checkFailed: [
     "⚠️ **I couldn't finish this check**",

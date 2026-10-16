@@ -316,8 +316,8 @@ export async function investigate(check: Check, language: string, progress: Prog
 }
 
 /** "I already clicked" — find the real org's guidance and give calm next steps. */
-export async function recover(about: string, sender: string | null, language: string) {
-  const hits = await search(`${sender ?? ""} what to do if you clicked a phishing link scam Canada`.trim(), {
+export async function recover(about: string, sender: string | null, language: string, country = "Canada") {
+  const hits = await search(`${sender ?? ""} what to do if you clicked a phishing link scam ${country}`.trim(), {
     purpose: "Find official guidance for someone who already responded to a scam",
   });
   const pages = await fetchPages(hits.filter((h) => !SOCIAL.test(h.url)).slice(0, 2).map((h) => h.url), "Steps after falling for a scam");
