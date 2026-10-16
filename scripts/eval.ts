@@ -1,4 +1,4 @@
-// Runs the CONTEXT.md test set through the real pipeline and prints verdict + sources + timing.
+// Runs the Sage test set through the real pipeline and prints verdict + sources + timing.
 //   bun run eval            → every text case
 //   bun run eval 1 2 3 5    → only those cases
 // Uses live APIs: Search/Fetch are free, Agent runs spend credits (scam cases with an official site).

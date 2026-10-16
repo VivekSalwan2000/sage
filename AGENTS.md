@@ -1,1 +1,1 @@
-Read CONTEXT.md before making changes. It has the bounty requirements, deadline, and every locked decision.
+Read CONTEXT.md (the local planning brief; it is git-ignored and not part of the public repo) before making changes, if it exists. README.md documents the system.
