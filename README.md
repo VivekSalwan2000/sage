@@ -166,7 +166,7 @@ flowchart TB
 The full path of one message, from the moment it's sent to the moment the family alert card is offered.
 
 <details>
-<summary><h3>👉 Click to view the step-by-step sequence diagram</h3></summary>
+<summary><h3>👉 Click to view the sequence diagram</h3></summary>
 
 ```mermaid
 sequenceDiagram
@@ -304,7 +304,7 @@ flowchart TD
 How a conversation moves from the first hello to a verdict, a family alert card, and a check-in after a bad moment.
 
 <details>
-<summary><h3>👉 Click to view the conversation state diagram</h3></summary>
+<summary><h3>👉 Click to view the state diagram</h3></summary>
 
 ```mermaid
 stateDiagram-v2
