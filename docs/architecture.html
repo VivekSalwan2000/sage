@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sage · System Explorer</title>
+<meta name="description" content="Interactive tour of how Sage checks a suspicious message: iMessage via Photon Spectrum, live web work via TinyFish Search, Fetch and Agent, and a verdict back in iMessage.">
+<style>
+  :root {
+    --bg: #f6f7f5; --panel: #ffffff; --ink: #14201b; --muted: #5d6b65; --line: #dfe4e1; --line-strong: #c3ccc7;
+    --sage: #2a6351; --sage-soft: #e3efe9; --photon: #1b1b1f; --photon-soft: #ececef;
+    --tf: #e8650f; --tf-soft: #fdeee2; --gem: #2f6fe0; --gem-soft: #e7eefc; --db: #7a5ac8; --db-soft: #efe9fb;
+    --web: #6b7a74; --active: #e8650f; --bubble-in: #e9e9eb; --bubble-out: #0b84ff; --scam: #d93a3a;
+    --radius: 14px; --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1412; --panel: #161d1a; --ink: #e9efec; --muted: #9aa8a2; --line: #26302c; --line-strong: #36423d;
+      --sage-soft: #1d2f28; --photon: #e9e9ee; --photon-soft: #22252b; --tf-soft: #34230f; --gem-soft: #17233a; --db-soft: #251d36;
+      --bubble-in: #26282c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); line-height: 1.5; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 32px 20px 48px; }
+  header { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+  header svg { flex: none; }
+  h1 { font-size: 26px; margin: 0; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 4px 0 24px; max-width: 760px; }
+  .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .tag { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); }
+  .tag b { color: var(--ink); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+  .map { padding: 12px; }
+  .map svg { width: 100%; height: auto; display: block; }
+  .controls { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+  button { font: inherit; font-size: 14px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); border-radius: 10px; padding: 7px 14px; cursor: pointer; }
+  button:hover { border-color: var(--sage); }
+  button.primary { background: var(--sage); border-color: var(--sage); color: #fff; }
+  .dots { display: flex; gap: 5px; margin-left: auto; flex-wrap: wrap; }
+  .dot { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-strong); background: transparent; font-size: 11px; padding: 0; color: var(--muted); }
+  .dot.on { background: var(--sage); border-color: var(--sage); color: #fff; }
+  .story { padding: 18px 20px; margin-top: 20px; }
+  .story .kicker { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--tf); font-weight: 600; }
+  .story h2 { margin: 4px 0 6px; font-size: 20px; }
+  .story p { margin: 0; color: var(--muted); }
+  .story ul { margin: 10px 0 0; padding-left: 18px; color: var(--ink); }
+  .story li { margin: 3px 0; }
+  .detail { padding: 18px 20px; margin-top: 20px; display: none; }
+  .detail.show { display: block; }
+  .detail h3 { margin: 0 0 4px; font-size: 17px; }
+  .detail .meta { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; font-size: 14px; margin-top: 10px; }
+  .detail .meta span:nth-child(odd) { color: var(--muted); }
+  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; background: var(--sage-soft); padding: 1px 6px; border-radius: 6px; }
+
+  /* phone */
+  .phone { position: sticky; top: 16px; padding: 0; overflow: hidden; }
+  .phone-top { text-align: center; padding: 14px 0 10px; border-bottom: 1px solid var(--line); }
+  .phone-top .avatar { width: 40px; height: 40px; margin: 0 auto 4px; }
+  .phone-top .name { font-size: 13px; font-weight: 600; }
+  .chat { height: 560px; overflow-y: auto; padding: 14px 12px 18px; display: flex; flex-direction: column; gap: 6px; scroll-behavior: smooth; }
+  .b { max-width: 82%; padding: 8px 12px; border-radius: 18px; font-size: 13.5px; white-space: pre-line; animation: pop .25s ease-out; position: relative; }
+  .b.in { align-self: flex-start; background: var(--bubble-in); }
+  .b.out { align-self: flex-end; background: var(--bubble-out); color: #fff; }
+  .b.img { align-self: flex-end; background: var(--bubble-in); color: var(--muted); border: 1px dashed var(--line-strong); font-size: 12.5px; }
+  .b.loud { animation: loud .5s ease-out; }
+  .b .edited { display: block; font-size: 10.5px; color: #0b84ff; margin-top: 2px; }
+  .b.preview { padding: 0; overflow: hidden; background: var(--panel); border: 1px solid var(--line); width: 82%; }
+  .b.preview .pv-img { height: 64px; background: linear-gradient(135deg, #95bf47, #5e8e3e); }
+  .b.preview .pv-txt { padding: 8px 12px; font-size: 12.5px; }
+  .b.preview .pv-txt small { color: var(--muted); display: block; }
+  .tapback { position: absolute; top: -12px; left: -10px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; font-size: 12px; padding: 1px 6px; }
+  .typing { align-self: flex-start; background: var(--bubble-in); border-radius: 18px; padding: 10px 14px; display: flex; gap: 4px; }
+  .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); opacity: .5; animation: blink 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 50% { opacity: 1; } }
+  @keyframes pop { from { transform: scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes loud { 0% { transform: scale(1.2); } 60% { transform: scale(.97); } 100% { transform: none; } }
+
+  /* diagram */
+  .node rect { fill: var(--panel); stroke: var(--line-strong); stroke-width: 1.2; transition: all .25s; }
+  .node text { fill: var(--ink); font-size: 13px; font-weight: 600; pointer-events: none; }
+  .node text.s { font-size: 10.5px; font-weight: 400; fill: var(--muted); }
+  .node { cursor: pointer; }
+  .node:hover rect { stroke-width: 2; }
+  .node.k-photon rect { fill: var(--photon-soft); } .node.k-sage rect { fill: var(--sage-soft); }
+  .node.k-tf rect { fill: var(--tf-soft); } .node.k-gem rect { fill: var(--gem-soft); } .node.k-db rect { fill: var(--db-soft); }
+  .node.on rect { stroke: var(--active); stroke-width: 2.6; }
+  .node.sel rect { stroke: var(--sage); stroke-width: 2.6; }
+  .edge { stroke: var(--line-strong); stroke-width: 1.6; fill: none; transition: stroke .25s; }
+  .edge.on { stroke: var(--active); stroke-width: 2.6; stroke-dasharray: 7 6; animation: flow .8s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -26; } }
+  .group { fill: none; stroke: var(--sage); stroke-width: 1.2; stroke-dasharray: 5 5; opacity: .7; }
+  .glabel { fill: var(--sage); font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 4px 16px 12px; font-size: 12px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  footer { margin-top: 28px; color: var(--muted); font-size: 13px; text-align: center; }
+  @media (max-width: 960px) {
+    .grid { grid-template-columns: 1fr; }
+    .phone { position: static; }
+    .chat { height: 420px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg width="48" height="48" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#2a6351"/><path d="M20 15h24l6 3v8c0 13-8 21-18 26-10-5-18-13-18-26v-8z" fill="#fff"/><path d="M25 32l5 5 10-12" stroke="#2a6351" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div><h1>How a check travels through Sage</h1></div>
+  </header>
+  <p class="sub">Follow one suspicious text, a fake "Shopify internship" asking for a SIN, from the moment it's sent in iMessage to the verdict and family alert card. Press <b>Play</b>, step with <b>← →</b>, or click any component to see what it does.</p>
+  <div class="tags">
+    <span class="tag"><b>Photon Spectrum</b> · iMessage layer</span>
+    <span class="tag"><b>TinyFish</b> · Search · Fetch · Agent</span>
+    <span class="tag"><b>Gemini</b> · understand + judge</span>
+    <span class="tag"><b>Bun + TypeScript</b> · SQLite memory</span>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <div class="map">
+          <svg id="map" viewBox="0 0 1200 640" role="img" aria-label="Sage architecture: user, Photon Spectrum, Sage runtime components, Gemini, TinyFish endpoints and the live web">
+            <rect class="group" x="372" y="34" width="430" height="590" rx="18"/>
+            <text class="glabel" x="392" y="58">SAGE RUNTIME · BUN + TYPESCRIPT</text>
+            <g id="edges"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--photon-soft);border:1px solid var(--line-strong)"></i>Photon</span>
+          <span><i style="background:var(--sage-soft);border:1px solid var(--line-strong)"></i>Sage</span>
+          <span><i style="background:var(--gem-soft);border:1px solid var(--line-strong)"></i>Gemini</span>
+          <span><i style="background:var(--tf-soft);border:1px solid var(--line-strong)"></i>TinyFish</span>
+          <span><i style="background:var(--db-soft);border:1px solid var(--line-strong)"></i>Memory</span>
+          <span><i style="background:var(--active)"></i>Active path</span>
+        </div>
+        <div class="controls">
+          <button id="play" class="primary" aria-label="Play the tour">▶ Play</button>
+          <button id="prev" aria-label="Previous step">← Back</button>
+          <button id="next" aria-label="Next step">Next →</button>
+          <button id="reset" aria-label="Restart the tour">Restart</button>
+          <div class="dots" id="dots"></div>
+        </div>
+      </div>
+
+      <div class="card story" id="story" aria-live="polite">
+        <div class="kicker" id="kicker">Step 1</div>
+        <h2 id="title"></h2>
+        <p id="body"></p>
+        <ul id="facts"></ul>
+      </div>
+
+      <div class="card detail" id="detail">
+        <h3 id="d-title"></h3>
+        <p id="d-body" style="margin:0;color:var(--muted)"></p>
+        <div class="meta" id="d-meta"></div>
+      </div>
+    </div>
+
+    <div class="card phone">
+      <div class="phone-top">
+        <svg class="avatar" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="32" fill="#2a6351"/><path d="M20 15h24l6 3v8c0 13-8 21-18 26-10-5-18-13-18-26v-8z" fill="#fff"/><path d="M25 32l5 5 10-12" stroke="#2a6351" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="name">Sage</div>
+      </div>
+      <div class="chat" id="chat"></div>
+    </div>
+  </div>
+
+  <footer>Sage · built for TinyFish Student Bounty Drop 001 · Photon Spectrum × TinyFish · timings are typical, not guaranteed</footer>
+</div>
+
+<script>
+const NODES = {
+  user:    { x: 30,  y: 290, w: 150, label: "You", sub: "iPhone · iMessage", kind: "",
+             title: "The person", body: "Forwards anything that feels off: a pasted text, a link, a screenshot or a voice note. No app, no account.",
+             meta: [["Input", "text · link · screenshot · voice note"], ["Talks to", "one Sage number (shared pool)"]] },
+  photon:  { x: 205, y: 290, w: 150, label: "Photon Spectrum", sub: "iMessage cloud", kind: "photon",
+             title: "Photon Spectrum (messaging layer)", body: "Delivers iMessages to Sage over a gRPC stream and sends everything back natively: tapbacks, typing, edited progress bubbles, bubble effects, rich link previews and contact cards.",
+             meta: [["SDK", "spectrum-ts · cloud iMessage"], ["Native features", "react · edit · effect · richlink · nativeContactCard"], ["Plan", "Pro, shared pool of lines"]] },
+  inbound: { x: 465, y: 78,  w: 250, label: "Inbound pipeline", sub: "dedupe · allowlist · burst debounce", kind: "sage",
+             title: "Inbound pipeline", body: "Drops duplicates (delivery is at-least-once), applies the allowlist, shows typing at once, and waits 3.5 s so 'look at this' plus a screenshot become one request.",
+             meta: [["File", "src/index.ts"], ["Debounce", "3.5 s"], ["Voice notes", ".caf → WAV with afconvert"]] },
+  convo:   { x: 465, y: 162, w: 250, label: "Conversation engine", sub: "profile · intents · pending answers", kind: "sage",
+             title: "Conversation engine", body: "Runs first-contact onboarding (name, city), routes intents (check, follow-up, links, try again, I already clicked, add family) and resolves yes/no answers.",
+             meta: [["File", "src/index.ts"], ["Memory", "profile, history, last checks"], ["Asks once", "first name + city/country"]] },
+  invest:  { x: 465, y: 246, w: 250, label: "Investigation engine", sub: "Search → Fetch ∥ Agent", kind: "sage",
+             title: "Investigation engine", body: "Orchestrates the web work: three parallel searches, picks the real official domain, checks every link, then reads pages and runs the agent in parallel. Results are cached 24 h.",
+             meta: [["File", "src/investigate.ts"], ["Parallelism", "3 searches · Fetch ∥ Agent"], ["Cache", "24 h per message + language"]] },
+  trust:   { x: 465, y: 330, w: 250, label: "Trust layer", sub: "citations · red flags · contacts", kind: "sage",
+             title: "Trust layer (code, not prompts)", body: "Verifies the model: unknown citations are dropped, red flags the code can disprove are removed, Scam without evidence is rewritten, and official numbers must appear on official pages.",
+             meta: [["File", "src/investigate.ts"], ["Scam needs", "a decisive flag or two flags"], ["Never", "'safe to click', fake sources"]] },
+  fmt:     { x: 465, y: 414, w: 250, label: "Message system", sub: "verdict · steps · cards", kind: "sage",
+             title: "Message design system", body: "One module writes every message: colour-first verdicts, 🚩/✅ reasons, 1️⃣ 2️⃣ 3️⃣ steps, short source names, the preview card, and the family alert card.",
+             meta: [["File", "src/format.ts"], ["Style", "plain words, no jargon, user's language"], ["Effects", "loud on scams · gentle on good news"]] },
+  sched:   { x: 465, y: 498, w: 118, label: "Scheduler", sub: "check-ins", kind: "sage",
+             title: "Scheduler", body: "Sends one check-in after 'I already clicked' (default 60 min). Stored in SQLite so a restart never loses it, and never repeated.",
+             meta: [["Tick", "every 20 s"], ["Delay", "CHECKIN_MINUTES"]] },
+  db:      { x: 597, y: 498, w: 118, label: "SQLite", sub: "memory", kind: "db",
+             title: "SQLite memory", body: "Users and profiles, short text history, checks with their links, the cache, follow-ups and usage limits. Screenshots and voice notes are never stored.",
+             meta: [["File", "src/db.ts"], ["Tables", "users · turns · checks · cache · followups · usage"]] },
+  understand: { x: 845, y: 78, w: 170, label: "understand()", sub: "text · image · audio", kind: "gem",
+             title: "Gemini · understand()", body: "Reads the message, screenshot or voice note and returns intent, who it claims to be from, links, the job being offered, and the user's language.",
+             meta: [["Model", "gemini-3.5-flash-lite (fails over to 3.1)"], ["Timeout", "20 s per call"]] },
+  judge:   { x: 845, y: 330, w: 170, label: "judge()", sub: "schema-enforced", kind: "gem",
+             title: "Gemini · judge()", body: "Writes the verdict only from numbered sources, choosing red flags from a fixed list. The JSON Schema forces one of the 8 verdict codes.",
+             meta: [["Output", "verdict · red flags · reasons · steps"], ["Temperature", "0"]] },
+  search:  { x: 845, y: 162, w: 170, label: "Search", sub: "TinyFish", kind: "tf",
+             title: "TinyFish Search", body: "Finds reports of the exact wording and of the suspicious website, the organisation's real official site, and its own fraud and careers pages (site-restricted). Country-aware.",
+             meta: [["Calls per check", "3 parallel + 2 site-restricted"], ["Timeout", "12 s"], ["Cost", "free"]] },
+  fetch:   { x: 845, y: 246, w: 170, label: "Fetch", sub: "TinyFish", kind: "tf",
+             title: "TinyFish Fetch", body: "Renders and reads the official warning page and the top scam reports. The verdict is written only from these pages.",
+             meta: [["URLs", "up to 5, in parallel"], ["Timeout", "60 s"], ["Cost", "free"]] },
+  agent:   { x: 845, y: 414, w: 170, label: "Agent", sub: "TinyFish · streamed", kind: "tf",
+             title: "TinyFish Agent", body: "Acts on the real website. For job offers it searches the company's own careers page for the role; otherwise it finds the official way to report fraud and the real support number. Live steps stream into the progress bubble.",
+             meta: [["Budget", "75 s careers · 35 s reporting"], ["Daily cap", "40 runs"], ["Mode", "SSE stream"]] },
+  web:     { x: 1060, y: 246, w: 120, label: "Live web", sub: "official · reports", kind: "",
+             title: "The live web", body: "Official sites (shopify.com, canada.ca), scam reports and fact-checks, read at the moment of the check. Nothing is canned.",
+             meta: [["Never cited", "social media posts"]] },
+};
+const EDGES = [
+  ["user","photon"],["photon","inbound"],["inbound","convo"],["convo","understand"],["convo","invest"],
+  ["invest","search"],["invest","fetch"],["invest","agent"],["search","web"],["fetch","web"],["agent","web"],
+  ["invest","judge"],["judge","trust"],["trust","fmt"],["fmt","photon"],["convo","db"],["sched","db"],["sched","photon"],
+];
+const H = 56;
+const center = (n) => ({ x: NODES[n].x + NODES[n].w / 2, y: NODES[n].y + H / 2 });
+
+function edgePath(a, b) {
+  const A = NODES[a], B = NODES[b];
+  const ac = center(a), bc = center(b);
+  let x1, y1, x2, y2;
+  if (Math.abs(ac.x - bc.x) > Math.abs(ac.y - bc.y) * 1.2 || A.x + A.w < B.x || B.x + B.w < A.x) {
+    x1 = ac.x < bc.x ? A.x + A.w : A.x; y1 = ac.y;
+    x2 = ac.x < bc.x ? B.x : B.x + B.w; y2 = bc.y;
+    const mx = (x1 + x2) / 2;
+    return `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+  }
+  x1 = ac.x; y1 = ac.y < bc.y ? A.y + H : A.y; x2 = bc.x; y2 = ac.y < bc.y ? B.y : B.y + H;
+  return `M${x1},${y1} L${x2},${y2}`;
+}
+
+const svgNS = "http://www.w3.org/2000/svg";
+const edgesG = document.getElementById("edges"), nodesG = document.getElementById("nodes");
+const edgeEls = {};
+for (const [a, b] of EDGES) {
+  const p = document.createElementNS(svgNS, "path");
+  p.setAttribute("d", edgePath(a, b)); p.setAttribute("class", "edge");
+  edgesG.appendChild(p); edgeEls[a + ">" + b] = p;
+}
+const nodeEls = {};
+for (const [id, n] of Object.entries(NODES)) {
+  const g = document.createElementNS(svgNS, "g");
+  g.setAttribute("class", "node" + (n.kind ? " k-" + n.kind : ""));
+  g.setAttribute("tabindex", "0"); g.setAttribute("role", "button"); g.setAttribute("aria-label", n.label + " details");
+  const r = document.createElementNS(svgNS, "rect");
+  Object.entries({ x: n.x, y: n.y, width: n.w, height: H, rx: 12 }).forEach(([k, v]) => r.setAttribute(k, v));
+  const t = document.createElementNS(svgNS, "text"); t.setAttribute("x", n.x + n.w / 2); t.setAttribute("y", n.y + 24); t.setAttribute("text-anchor", "middle"); t.textContent = n.label;
+  const s = document.createElementNS(svgNS, "text"); s.setAttribute("class", "s"); s.setAttribute("x", n.x + n.w / 2); s.setAttribute("y", n.y + 42); s.setAttribute("text-anchor", "middle"); s.textContent = n.sub;
+  g.append(r, t, s); nodesG.appendChild(g); nodeEls[id] = g;
+  const open = () => showDetail(id);
+  g.addEventListener("click", open);
+  g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+}
+
+function showDetail(id) {
+  const n = NODES[id];
+  Object.values(nodeEls).forEach((el) => el.classList.remove("sel"));
+  nodeEls[id].classList.add("sel");
+  document.getElementById("d-title").textContent = n.title;
+  document.getElementById("d-body").textContent = n.body;
+  const meta = document.getElementById("d-meta"); meta.innerHTML = "";
+  for (const [k, v] of n.meta) { const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = v; meta.append(a, b); }
+  const d = document.getElementById("detail"); d.classList.add("show");
+  d.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+// Each step: which nodes/edges light up, what the phone shows, and the story.
+const STEPS = [
+  { nodes: ["user","photon"], edges: [["user","photon"]], t: "0 s",
+    title: "A suspicious text, forwarded", body: "The user screenshots the 'Shopify internship' text and sends it to Sage with a question. Photon Spectrum carries it like any iMessage.",
+    facts: ["Works with text, links, screenshots and voice notes", "No app or account: Sage is just a contact"],
+    phone: [["img", "📷 Screenshot · \"Congrats! You've been selected for a Remote Data Analyst internship at Shopify, $45/hr. Reply with your SIN…\""], ["out", "is this real?"]] },
+  { nodes: ["photon","inbound"], edges: [["photon","inbound"]], t: "0–3.5 s",
+    title: "Received, de-duplicated, merged", body: "The inbound pipeline drops duplicate deliveries, checks the allowlist, shows the typing indicator at once, and waits 3.5 s so the screenshot and the question are handled as one request.",
+    facts: ["At-least-once delivery → dedupe on message id", "Burst debounce: 3.5 s"], phone: [["typing"]] },
+  { nodes: ["inbound","convo","understand","db"], edges: [["inbound","convo"],["convo","understand"],["convo","db"]], t: "≈4–6 s",
+    title: "Understanding the message", body: "The conversation engine loads the user's profile and recent context, then Gemini reads the screenshot and returns structured facts.",
+    facts: ["intent: check · type: scam", "claimed sender: Shopify · official guess: shopify.com", "job: Remote Data Analyst internship", "language: English · user in Toronto, Canada → searches localised to CA"], phone: [] },
+  { nodes: ["fmt","photon","user"], edges: [["fmt","photon"],["user","photon"]], t: "≈6 s",
+    title: "Instant feedback", body: "Sage reacts with a ‼️ tapback and opens one progress bubble. From here it only edits that bubble (iMessage allows 5 edits per message), so the chat stays clean.",
+    facts: ["Tapback = 'got it'", "Progress edits are queued and capped at 5"], phone: [["tapback"], ["progress", "🔎 Looking into this for you…"]] },
+  { nodes: ["convo","invest","search","web"], edges: [["convo","invest"],["invest","search"],["search","web"]], t: "≈6–9 s",
+    title: "Three searches in parallel", body: "TinyFish Search looks for reports of this wording, reports about the suspicious website, and the organisation's real official site, all at the same time.",
+    facts: ["Search 1: \"Shopify … scam text\"", "Search 2: \"<link domain> scam\" (if there's a link)", "Search 3: \"Shopify official website\"", "Each capped at 12 s"], phone: [] },
+  { nodes: ["invest","search"], edges: [["invest","search"]], t: "≈9–11 s",
+    title: "Official site and link check", body: "Code picks the real official domain (never a link from the message) and checks every link: official, a known platform like Square, a URL shortener, or a mismatch. It then searches inside the official site for its fraud page and careers page.",
+    facts: ["Official domain: shopify.com", "Site-restricted searches → shopify.com/careers"], phone: [["progress", "📖 Reading what Shopify and others say about this…"]] },
+  { nodes: ["invest","fetch","agent","web"], edges: [["invest","fetch"],["invest","agent"],["fetch","web"],["agent","web"]], t: "≈11–60 s",
+    title: "Read and act, in parallel", body: "TinyFish Fetch reads the official warning page and top reports while the TinyFish Agent opens Shopify's real careers page and searches it for the advertised role.",
+    facts: ["Fetch: up to 5 pages, rendered", "Agent: careers search, 75 s budget, streamed", "Reporting checks get 35 s instead"], phone: [["progress", "🧭 Searching Shopify's real job listings…"]] },
+  { nodes: ["agent","web"], edges: [["agent","web"]], t: "≈40–80 s",
+    title: "The agent reports back", body: "The agent finishes its search on the live site and returns a structured result, which becomes first-hand evidence for the verdict.",
+    facts: ["role_found: false", "closest listing: none for this role", "Evidence: 'No such role is listed on Shopify's real careers page'"], phone: [["progress", "⏳ Still checking Shopify's job listings, almost there…"]] },
+  { nodes: ["invest","judge"], edges: [["invest","judge"]], t: "+2–5 s",
+    title: "Gemini writes the verdict", body: "Gemini judges only from the numbered sources: the official page, the reports and the agent's finding. A JSON Schema forces a valid verdict code and red flags from a fixed list.",
+    facts: ["verdict: SCAM", "red flags: asks_personal_info · role_not_on_official_site · unexpected_offer", "Every reason cites a source ID"], phone: [] },
+  { nodes: ["judge","trust"], edges: [["judge","trust"]], t: "instant",
+    title: "Trust layer verifies", body: "Code checks the model's work before anything is sent: citations must point at real pages, disprovable red flags are removed, Scam needs a decisive flag or two, and contact numbers must appear on official pages.",
+    facts: ["✅ 'asks for personal info' is decisive", "✅ the agent's check backs 'role not on site'", "✅ all citations resolve"], phone: [] },
+  { nodes: ["trust","fmt","photon","user"], edges: [["trust","fmt"],["fmt","photon"],["user","photon"]], t: "≈50–90 s",
+    title: "The verdict lands", body: "The message system lays it out: colour first, 🚩 reasons, numbered steps, short source names, and a preview card of the official page. A scam arrives with iMessage's loud bubble effect.",
+    facts: ["Three messages + one preview card", "Full links on 'links'", "Saved to memory for follow-ups"],
+    phone: [["progress", "✅ Done · checked 5 sources"], ["loud", "🔴 Scam\nThis fake job offer is trying to get your personal details.\n\n🚩 No such role is listed on Shopify's real careers page\n🚩 Asks you to reply with your SIN"], ["in", "What to do\n1️⃣ Don't reply or send your SIN\n2️⃣ Block the number and delete the text\n3️⃣ Search jobs on shopify.com/careers yourself\n\n📚 Sources: shopify.com, consumer.ftc.gov"], ["preview", "Careers at Shopify|shopify.com"]] },
+  { nodes: ["fmt","photon","user","db"], edges: [["fmt","photon"],["user","photon"]], t: "after the verdict",
+    title: "The right moment: protect the family", body: "Only after a clear 🔴 Scam does Sage offer an alert card. With a yes it's texted to a confirmed family contact, and the user gets a copy to forward. Nothing is sent without a yes.",
+    facts: ["Self-contained and link-free, so it's safe to forward", "Later, after 'I already clicked', the scheduler sends one check-in"],
+    phone: [["in", "👨‍👩‍👧 Scams like this often reach family too. Want an alert card you can forward to them?\nReply yes or no."], ["out", "yes"], ["in", "⚠️ Scam alert\nA fake Shopify internship is asking for your SIN.\n\n🚩 No such role is listed on Shopify's real careers page\n🚫 Don't tap the link or reply\n🛡️ Search jobs on shopify.com/careers yourself\n\nChecked by Sage"], ["in", "↪️ Press and hold the card above, then tap Forward to send it to family or friends."]] },
+];
+
+const chat = document.getElementById("chat");
+let step = 0, timer = null, progressEl = null, progressEdits = 0;
+
+function renderPhone(upTo) {
+  chat.innerHTML = ""; progressEl = null; progressEdits = 0;
+  for (let i = 0; i <= upTo; i++) {
+    for (const [kind, text] of STEPS[i].phone) {
+      const typing = chat.querySelector(".typing"); if (typing && kind !== "typing") typing.remove();
+      if (kind === "typing") { const t = document.createElement("div"); t.className = "typing"; t.innerHTML = "<i></i><i></i><i></i>"; chat.appendChild(t); continue; }
+      if (kind === "tapback") { const imgs = chat.querySelectorAll(".b.img"); const last = imgs[imgs.length - 1]; if (last && !last.querySelector(".tapback")) { const tb = document.createElement("span"); tb.className = "tapback"; tb.textContent = "‼️"; last.appendChild(tb); } continue; }
+      if (kind === "progress") {
+        if (!progressEl) { progressEl = document.createElement("div"); progressEl.className = "b in"; chat.appendChild(progressEl); }
+        else progressEdits++;
+        progressEl.innerHTML = ""; progressEl.append(document.createTextNode(text));
+        if (progressEdits) { const e = document.createElement("span"); e.className = "edited"; e.textContent = "Edited"; progressEl.appendChild(e); }
+        continue;
+      }
+      const b = document.createElement("div");
+      if (kind === "preview") {
+        const [title, host] = text.split("|"); b.className = "b in preview";
+        b.innerHTML = '<div class="pv-img"></div><div class="pv-txt"></div>';
+        b.querySelector(".pv-txt").innerHTML = ""; const s1 = document.createElement("b"); s1.textContent = title; const s2 = document.createElement("small"); s2.textContent = host; b.querySelector(".pv-txt").append(s1, s2);
+      } else {
+        b.className = "b " + (kind === "loud" ? "in loud" : kind); b.textContent = text;
+      }
+      chat.appendChild(b);
+    }
+  }
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function go(i) {
+  step = Math.max(0, Math.min(STEPS.length - 1, i));
+  const s = STEPS[step];
+  Object.entries(nodeEls).forEach(([id, el]) => el.classList.toggle("on", s.nodes.includes(id)));
+  const active = new Set(s.edges.map(([a, b]) => a + ">" + b));
+  Object.entries(edgeEls).forEach(([k, el]) => el.classList.toggle("on", active.has(k)));
+  document.getElementById("kicker").textContent = `Step ${step + 1} of ${STEPS.length} · ${s.t}`;
+  document.getElementById("title").textContent = s.title;
+  document.getElementById("body").textContent = s.body;
+  const facts = document.getElementById("facts"); facts.innerHTML = "";
+  for (const f of s.facts) { const li = document.createElement("li"); li.textContent = f; facts.appendChild(li); }
+  document.querySelectorAll(".dot").forEach((d, k) => d.classList.toggle("on", k <= step));
+  renderPhone(step);
+}
+
+const dots = document.getElementById("dots");
+STEPS.forEach((_, k) => { const d = document.createElement("button"); d.className = "dot"; d.textContent = k + 1; d.setAttribute("aria-label", "Go to step " + (k + 1)); d.onclick = () => { stop(); go(k); }; dots.appendChild(d); });
+
+const playBtn = document.getElementById("play");
+function stop() { clearInterval(timer); timer = null; playBtn.textContent = "▶ Play"; }
+function play() {
+  if (timer) return stop();
+  if (step >= STEPS.length - 1) go(0);
+  playBtn.textContent = "❚❚ Pause";
+  timer = setInterval(() => { if (step >= STEPS.length - 1) return stop(); go(step + 1); }, 3200);
+}
+playBtn.onclick = play;
+document.getElementById("next").onclick = () => { stop(); go(step + 1); };
+document.getElementById("prev").onclick = () => { stop(); go(step - 1); };
+document.getElementById("reset").onclick = () => { stop(); go(0); };
+document.addEventListener("keydown", (e) => {
+  if (e.target.closest && e.target.closest(".node")) return;
+  if (e.key === "ArrowRight") { stop(); go(step + 1); }
+  if (e.key === "ArrowLeft") { stop(); go(step - 1); }
+  if (e.key === " ") { e.preventDefault(); play(); }
+});
+go(0);
+</script>
+</body>
+</html>

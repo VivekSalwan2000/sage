@@ -1,189 +1,519 @@
-<p align="center"><img src="assets/sage-logo.png" width="96" alt="Sage logo"></p>
+<div align="center">
 
-<h1 align="center">Sage</h1>
-<p align="center"><b>Text it anything that feels off. It checks the live web and texts back a clear answer.</b></p>
-<p align="center">An iMessage assistant built with <b>Photon Spectrum</b> (iMessage) + <b>TinyFish</b> (Search, Fetch and Agent).<br>TinyFish Student Bounty Drop 001: "Build Your Own AI Assistant on iMessage".</p>
+<img src="assets/sage-logo.png" width="104" alt="Sage">
+
+# Sage
+
+### The scam checker that lives in iMessage.
+
+**Forward anything that feels off. Sage investigates it on the live web and texts back a clear verdict, the steps to take, and the sources it read, in about a minute.**
+
+<br>
+
+![iMessage](https://img.shields.io/badge/Channel-iMessage-34C759?style=for-the-badge&logo=apple&logoColor=white)
+![Photon Spectrum](https://img.shields.io/badge/Messaging-Photon_Spectrum-111111?style=for-the-badge)
+![TinyFish](https://img.shields.io/badge/Web-TinyFish_Search·Fetch·Agent-FF7A1A?style=for-the-badge)
+![Gemini](https://img.shields.io/badge/Reasoning-Gemini-4285F4?style=for-the-badge&logo=googlegemini&logoColor=white)
+![Bun](https://img.shields.io/badge/Runtime-Bun_+_TypeScript-000000?style=for-the-badge&logo=bun&logoColor=white)
+
+[**How it works**](#-how-a-check-travels) · [**Architecture**](#-system-architecture) · [**Trust model**](#-trust-model) · [**Interactive explorer**](docs/architecture.html) · [**Run it**](#-quick-start)
+
+</div>
 
 ---
 
-## The moment it's built for
+## 📱 The product in one conversation
 
-You're a student. A text arrives: *"Congrats! You've been selected for a Remote Data Analyst internship at Shopify, $45/hr. Reply with your SIN to start onboarding."*
+> A student gets a text: *"Congrats! You've been selected for a Remote Data Analyst internship at Shopify, $45/hr. Reply with your SIN to start onboarding."* They screenshot it and send it to Sage.
 
-It looks real enough. You don't want to miss a real offer, and you don't want to hand a stranger your SIN. So you screenshot it and send it to **Sage**.
+<table>
+<tr>
+<td width="50%" valign="top">
 
-About a minute later:
+**What they see, live**
+```
+‼️  (tapback, instantly)
 
+🔎 Looking into this for you…
+📖 Reading what Shopify and others say…
+🧭 Searching Shopify's real job listings…
+✅ Done · checked 5 sources
+```
 ```
 🔴 Scam
-This fake job offer is trying to get your personal details.
+This fake job offer is trying to get
+your personal details.
 
-🚩 No such role is listed on Shopify's real careers page
-🚩 Asks you to reply with your SIN by text
+🚩 No such role is listed on Shopify's
+   real careers page
+🚩 Asks you to reply with your SIN
+```
 
+</td>
+<td width="50%" valign="top">
+
+**…followed by**
+```
 What to do
 1️⃣ Don't reply or send your SIN
 2️⃣ Block the number and delete the text
-3️⃣ Search for open jobs on shopify.com/careers yourself
+3️⃣ Search jobs on shopify.com/careers
+   yourself
 
 📚 Sources: shopify.com, consumer.ftc.gov
 Reply "links" for the full links
 ```
+`[ preview card: Shopify Careers ]`
+```
+👨‍👩‍👧 Scams like this often reach family
+too. Want an alert card you can
+forward to them? Reply yes or no.
+```
 
-…plus a preview card of Shopify's real careers page, and an offer to send a ready-made **scam alert card** to your family.
+</td>
+</tr>
+</table>
 
-Students get these near-daily: fake internships and recruiters, "CRA owes you a refund" texts, $1.99 parcel fees, rental deposit scams, ticket resales. The same scams reach their parents and grandparents, so Sage is written for **anyone**: plain words, no tech jargon, one clear answer.
+Behind that minute: **three web searches, a live read of Shopify's own pages, and an AI agent that opened Shopify's real careers site and searched it for the job.** Every claim in the verdict points to a page Sage actually read.
 
 ---
 
-## What Sage does
+## 🎯 Why it exists
 
-| | |
+Students get these near-daily: fake internships and recruiters, *"CRA owes you a refund"*, $1.99 parcel fees, rental deposits, ticket resales. The same scams reach their parents and grandparents. Checking takes know-how most people don't have in the moment, so they guess.
+
+**Sage turns "is this real?" into a one-text habit.** No app to install and no account. It answers in plain language anyone can follow, in the app where the scam arrived.
+
+| | Outcome |
 |---|---|
-| 🔎 **Checks anything you forward** | Pasted texts, emails, DMs, links, **screenshots** and **voice notes** |
-| 🧭 **Does real web work** | Searches for reports, reads the official site, and sends an agent onto the real website (e.g. Shopify's careers search) |
-| 🔴🟠🟡🟢 **One clear verdict** | Scam · Be careful · Can't confirm · Looks real (fact-checks: False · Misleading · Unproven · True) |
-| 1️⃣ **Steps you can follow** | What to do now, and how to check it yourself through the official app or site |
-| 📚 **Real sources only** | Every source is a page TinyFish actually searched or read; reply `links` for the full URLs |
-| 👨‍👩‍👧 **Family alert card** | After a scam, a short link-free warning to text a family contact (with your yes) or forward yourself |
-| 🫶 **"I already clicked"** | Calm damage-control steps from official guidance, then **one check-in later**: "Did you get through the steps?" |
-| 🙂 **Remembers you** | Asks your first name and city once, then remembers them, your language, your last checks and your family contact |
-| 🌍 **Your language, your country** | Replies in the language you write in; searches use your country (CRA in Canada, IRS in the US…) |
+| 🧭 **Real investigation, not vibes** | Every verdict comes from live web work: reports, the organisation's official site, and an agent that checks the real website |
+| 🔴🟠🟡🟢 **One clear answer** | Scam · Be careful · Can't confirm · Looks real (fact-checks: False · Misleading · Unproven · True) |
+| 🛡️ **Trust you can audit** | Real sources only, red flags tied to *this* message, never "safe to click", nothing sent without a yes |
+| 👨‍👩‍👧 **Protects the family too** | One-tap alert cards for family, sent directly or forwarded |
+| 🙂 **Feels like a person** | Remembers you, replies in your language, checks in after a bad moment, and stays quiet otherwise |
 
 ---
 
-## How Photon and TinyFish are each used
+## ✨ Capabilities
 
-### Photon Spectrum: the iMessage layer
-- **Receives** texts, links, screenshots, voice notes and bursts ("look at this" + a screenshot) as one request.
-- **Feels native**: a ‼️ tapback the moment a scam arrives, a typing indicator, and **one progress bubble edited in place** as the web work runs ("🔎 Looking into this…" → "🧭 Searching Shopify's real job listings…" → "✅ Done · checked 5 sources").
-- **Formats** verdicts with native bold, a **loud** bubble effect on scams and a **gentle** one on good news, a **rich link preview** of the official page, and Sage's **contact card** after onboarding.
-- **Sends** the family alert as a direct iMessage, and the one-time check-in in your existing chat.
+<table>
+<tr><td>
 
-### TinyFish: the web layer (all three endpoints, each with a distinct job)
-| Endpoint | Job in Sage |
-|---|---|
-| **Search** | Finds reports of the exact message and of the suspicious website, identifies the organisation's **real official domain**, finds its own fraud-warning and careers pages, and finds news and fact-checks for forwarded claims |
-| **Fetch** | Reads those pages live (the official warning page, scam reports, fact-checks). The verdict is written only from what was read |
-| **Agent** | Acts on the **real website**: for a job offer it searches the company's own careers page for the advertised role ("no such role is listed"); otherwise it finds the official way to report fraud and the real support number. Its live steps feed the progress bubble |
+**Understands anything you forward**
+- Pasted texts, emails, DMs and links
+- **Screenshots** (vision) and **voice notes** (auto-converted from iMessage `.caf`)
+- Bursts: *"look at this"* + a screenshot are merged into one request
+- Fact-checks viral forwards against news and fact-checkers
 
-### Gemini (free tier): reading and writing
-Reads screenshots and voice notes, works out what's being claimed, and writes the verdict **only from numbered TinyFish sources**, in the user's language.
+</td><td>
+
+**Acts on the live web (TinyFish)**
+- **Search**: scam reports, the suspicious site, the real official domain
+- **Fetch**: reads the official warning page and the reports
+- **Agent**: searches the company's real careers page, or finds the official way to report fraud
+- Country-aware: CRA in Canada, IRS in the US, HMRC in the UK
+
+</td></tr>
+<tr><td>
+
+**Feels native in iMessage (Photon)**
+- Instant tapback and typing indicator
+- **One progress bubble edited in place** while the web work runs
+- Bold verdicts, **loud** bubble effect on scams, **gentle** on good news
+- Rich link preview of the official page; Sage's own contact card
+
+</td><td>
+
+**Remembers and follows up**
+- First contact: asks your first name and city, **once**
+- Follow-ups (*"why?"*, *"exact steps?"*, *"links"*, *"try again"*) answered from memory
+- After *"I already clicked"*: calm steps, then **one check-in later**
+- Family alert cards, direct to a contact or yours to forward
+
+</td></tr>
+</table>
 
 ---
 
-## How one check works
+## 🏗 System architecture
+
+```mermaid
+flowchart TB
+  phone(["👤 User · iMessage<br/>text · link · screenshot · voice note"])
+  photon["📡 Photon Spectrum Cloud<br/>shared iMessage lines · gRPC stream"]
+
+  subgraph S["⚙️ Sage runtime · Bun + TypeScript"]
+    direction TB
+    inbound["Inbound pipeline<br/>dedupe · allowlist · 3.5 s burst debounce"]
+    convo["Conversation engine<br/>profile · intents · pending answers"]
+    invest["Investigation engine<br/>Search → Fetch ∥ Agent"]
+    trust["Trust layer<br/>citations · red flags · contacts"]
+    fmt["Message system<br/>verdict · steps · cards · effects"]
+    inbound --> convo --> invest --> trust --> fmt
+  end
+
+  subgraph AI["🧠 Gemini"]
+    understand["understand()<br/>text · image · audio"]
+    judge["judge()<br/>JSON Schema verdict"]
+  end
+
+  subgraph TF["🐟 TinyFish"]
+    search["Search"]
+    fetch["Fetch"]
+    agent["Agent · streamed"]
+  end
+
+  web(("🌐 Live web"))
+  db[("🗄 SQLite<br/>profiles · checks · cache · follow-ups")]
+  sched["⏰ Scheduler<br/>check-ins"]
+
+  phone <--> photon
+  photon --> inbound
+  fmt --> photon
+  convo -.-> understand
+  invest --> search & fetch & agent
+  search & fetch & agent --> web
+  invest -.-> judge -.-> trust
+  convo <--> db
+  sched --> db
+  sched --> photon
+```
+
+| Layer | Responsibility | Built with |
+|---|---|---|
+| **Messaging** | Receive and send iMessages, tapbacks, edits, effects, rich links, contact cards | Photon Spectrum (`spectrum-ts`, cloud iMessage) |
+| **Understanding** | Read text, screenshots and voice notes; classify intent; extract who it claims to be from, links and job details | Gemini, JSON mode |
+| **Investigation** | Find reports and the official site, read pages, act on the real website | TinyFish Search · Fetch · Agent |
+| **Judgement** | Write the verdict only from numbered sources; pick red flags from a fixed list | Gemini, JSON Schema-enforced |
+| **Trust** | Validate citations, red flags, official contacts and verdict strength in code | TypeScript |
+| **Memory** | Profiles, conversation, checks and links, cache, follow-ups, usage limits | SQLite (`bun:sqlite`) |
+
+---
+
+## 🛰 How a check travels
+
+The full path of one message, from the moment it's sent to the moment the family alert card is offered.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor U as 👤 User (iMessage)
+  participant P as Photon Spectrum
+  participant S as Sage runtime
+  participant G as Gemini
+  participant TS as TinyFish Search
+  participant TF as TinyFish Fetch
+  participant TA as TinyFish Agent
+  participant W as 🌐 Live web
+
+  U->>P: Screenshot + "is this real?"
+  P->>S: Inbound messages (gRPC stream)
+  Note over S: Dedupe · allowlist · typing indicator<br/>wait 3.5 s to merge the burst
+  S->>G: understand(text, image, profile, history)
+  G-->>S: intent=check · sender=Shopify · job=Data Analyst · links
+  S-->>U: ‼️ tapback + "🔎 Looking into this for you…"
+
+  par Three searches in parallel (≤12 s each)
+    S->>TS: "Shopify … scam text"
+    S->>TS: "<suspicious link> scam"
+    S->>TS: "Shopify official website"
+  end
+  TS-->>S: Ranked results
+  Note over S: Pick the official domain (never a link from the message)<br/>Link check: link domain vs official domain vs known platforms
+  S->>TS: Official fraud page + careers page (site-restricted)
+  S-->>U: ✏️ "📖 Reading what Shopify and others say…"
+
+  par Read and act at the same time
+    S->>TF: Fetch official warning page + top reports (≤5 URLs)
+    TF->>W: Render and extract pages
+    TF-->>S: Page text
+  and
+    S->>TA: Search shopify.com/careers for the role (≤75 s, streamed)
+    TA->>W: Navigate · type · read results
+    TA-->>S: role_found = false
+  end
+  S-->>U: ✏️ "🧭 Searching Shopify's real job listings…"
+
+  S->>G: judge(numbered sources, link check, agent findings)
+  G-->>S: verdict + red flags + steps (JSON Schema)
+  Note over S: Trust layer: drop unknown citations · disprove red flags<br/>SCAM needs evidence · contacts must appear on official pages
+  S-->>U: ✏️ "✅ Done · checked 5 sources"
+  S-->>U: 🔴 Scam bubble (loud effect)
+  S-->>U: What to do · sources · official number
+  S-->>U: Preview card of the official page
+  S-->>U: "Want an alert card for family?"
+  U->>S: yes
+  S-->>U: ⚠️ Scam alert card (+ sent to a family contact, if set)
+```
+
+**Latency budget.** Understanding takes about 1 to 3 s and the searches 1 to 3 s. Fetch and the Agent run **in parallel**: the Agent gets 35 s for a fraud-reporting check and 75 s for a careers search. Judging takes about 2 to 5 s. A typical check lands in **30 to 90 s**, and the progress bubble shows each stage so the wait never feels silent.
+
+---
+
+## 🔬 Investigation pipeline
 
 ```mermaid
 flowchart TD
-  A[iMessage in<br/>text · screenshot · voice note · link] -->|Photon Spectrum| B[Sage<br/>debounce · dedupe · profile · memory]
-  B --> C[Gemini: understand<br/>what is it, who claims to send it, which links]
-  C --> D[TinyFish Search<br/>scam reports · suspicious site · official site]
-  D --> E[Link check in code<br/>official domain vs link domain · known platforms]
-  E --> F[TinyFish Fetch<br/>official warning page · reports]
-  E --> G[TinyFish Agent<br/>careers search / how to report]
-  F --> H[Gemini: judge<br/>verdict + red flags from numbered sources only]
-  G --> H
-  H --> I[Code checks<br/>citations · red flags · contact numbers]
-  I -->|Photon Spectrum| J[Verdict → What to do → preview card<br/>→ family alert card offer]
+  A["Check request<br/>type · sender · links · job"] --> B{"Scam or<br/>fact-check?"}
+
+  B -- "message sent to you" --> C["Search ×3 in parallel<br/>reports by wording · reports by link · official site"]
+  C --> D["Official domain<br/>model guess confirmed by search,<br/>else a hit whose domain matches the sender"]
+  D --> E["Link check (code)<br/>✅ matches official · 🏷 known platform (Square, Calendly…)<br/>🔗 URL shortener · ❌ mismatch"]
+  E --> F["Search on the official site<br/>fraud page · careers page"]
+  F --> G["Fetch: official page + top 3 reports"]
+  F --> H{"Job offer?"}
+  H -- yes --> I["Agent → careers page<br/>is the role listed? · 75 s"]
+  H -- no --> J["Agent → official site<br/>how to report · real number · 35 s"]
+
+  B -- "news / rumour" --> K["Search news + fact-checks"]
+  K --> L["Fetch the best 4"]
+
+  G & I & J & L --> M["Numbered sources<br/>official · report · agent · news · search"]
+  M --> N["Gemini judge"]
+  N --> O["Trust layer"]
+  O --> P["Verdict + steps + preview + alert card"]
+```
+
+Results are **cached for 24 h per message and language**, so a scam forwarded by twenty people is investigated once.
+
+---
+
+## 🛡 Trust model
+
+Trust is enforced **in code**, not only requested in a prompt. The model proposes; the code verifies.
+
+```mermaid
+flowchart TD
+  J["Judge output<br/>verdict · red flags · citations · contact"] --> V{"Verdict is one of<br/>the 8 known codes?"}
+  V -- no --> V1["→ Can't confirm / Unproven"]
+  V -- yes --> R["Filter red flags the code can disprove<br/>• 'bad link' needs a real link mismatch<br/>• 'role not on site' needs the agent's check<br/>• 'org never sends this' can't stand alone"]
+  R --> S{"Scam / Be careful<br/>with no red flag left?"}
+  S -- yes --> S1["Ask the judge to rewrite once<br/>→ else force Can't confirm"]
+  S -- no --> K{"Scam with one weak flag<br/>and no decisive one?"}
+  K -- yes --> K1["→ Be careful"]
+  K -- no --> C["Citations: keep only IDs of pages<br/>TinyFish actually searched or read"]
+  S1 --> C
+  K1 --> C
+  C --> N{"Official phone or email<br/>appears on an official / agent page?"}
+  N -- no --> N1["Drop it"]
+  N -- yes --> OUT["✅ Send"]
+  N1 --> OUT
+```
+
+| Guarantee | How it's enforced |
+|---|---|
+| **Never fakes a source** | Citation IDs are validated against what TinyFish returned; sources are deduped, and social posts are never cited |
+| **No false alarms on real messages** | Red flags come from a fixed enum; unverifiable ones are filtered; SCAM needs a decisive flag (bad link, asks for personal info, asks for money) or two flags. A real Google alert, a real salon booking and a real Canada Post notice all come back 🟡/🟢 |
+| **Never "safe to click"** | The strongest positive is 🟢 *Looks real*, always with "check it through the official app yourself" |
+| **Nothing sent without a yes** | Adding a family contact, the invite, and every alert each require an explicit yes; the contact opts in themselves |
+| **No sensitive data** | Never asks for passwords, card or ID numbers; flags them if present; screenshots and voice notes are never stored |
+| **Fails safely** | 20 s timeout on every AI call with automatic model failover; send retries on dropped connections; `try again` re-runs a failed check; failed checks don't count toward the daily limit |
+
+---
+
+## 💬 Conversation lifecycle
+
+```mermaid
+stateDiagram-v2
+  [*] --> Welcome: first message
+  Welcome --> AskName: 👋 "What's your first name?"
+  AskName --> AskCity: name parsed
+  AskCity --> Ready: city + country parsed<br/>contact card shared
+  note right of AskName
+    A scam sent mid-onboarding is
+    held in memory and checked as
+    soon as the profile is done
+  end note
+
+  Ready --> Checking: message / screenshot / link
+  Checking --> Verdict: investigation done
+  Checking --> RetryOffered: web or AI failed
+  RetryOffered --> Checking: "try again"
+
+  Verdict --> AlertOffered: 🔴 Scam
+  AlertOffered --> CardSent: "yes"
+  AlertOffered --> Ready: "no"
+  CardSent --> Ready
+
+  Verdict --> Ready: 🟠 🟡 🟢
+  Ready --> FollowUp: "why?" · "exact steps?" · "links"
+  FollowUp --> Ready: answered from memory
+
+  Ready --> DamageControl: "I already clicked"
+  DamageControl --> CheckInScheduled: calm steps sent
+  CheckInScheduled --> CheckIn: after CHECKIN_MINUTES
+  CheckIn --> Ready: "done" / "help"
+```
+
+**"Texts at the right moment, otherwise stays quiet."** Sage only starts a message itself in two places: the alert-card offer straight after a 🔴 Scam verdict, and one check-in after *"I already clicked"*. Everything else is a reply.
+
+---
+
+## 🗄 Data model
+
+```mermaid
+erDiagram
+  USERS ||--o{ TURNS : has
+  USERS ||--o{ CHECKS : runs
+  USERS ||--o{ FOLLOWUPS : receives
+  USERS {
+    text id PK "iMessage handle"
+    text name
+    text city
+    text country_code "localises searches"
+    text language
+    text guardian_phone "family contact"
+    text guardian_status "invited | confirmed"
+    text pending "a yes/no Sage is waiting on"
+    text profile_stage "name | location | done"
+  }
+  TURNS {
+    int id PK
+    text role "user | sage"
+    text text "short history, no media"
+  }
+  CHECKS {
+    int id PK
+    text verdict
+    text headline
+    text sources "cited URLs, for 'links'"
+  }
+  FOLLOWUPS {
+    int id PK
+    int due_at
+    text kind "checkin"
+    int sent
+  }
+  CACHE {
+    text key PK "message + language"
+    text value "full investigation"
+  }
+  USAGE {
+    text day PK
+    text key PK "checks per user · agent runs"
+    int count
+  }
 ```
 
 ---
 
-## Trust rules, enforced in code (not just asked for in a prompt)
+## 🎨 Message design system
 
-- **Never fakes a source.** Every citation must point at a page TinyFish searched or read; unknown citations are dropped. An official phone number or email is shown only if it appears on the official site or in what the agent saw.
-- **A scam verdict needs evidence about *this* message.** The judge picks red flags from a fixed list (bad link, asks for personal info, asks for payment, deadline or threat, unexpected offer, role not on the real site, org says it never sends this). The code drops the ones it can disprove (e.g. "bad link" when the link check found none), and Scam / Be careful without a surviving red flag is rewritten as Can't confirm. A real Google security alert and a real salon booking text both come back 🟡 Can't confirm, not 🔴.
-- **Never says "safe to click".** The strongest positive is 🟢 Looks real, always with "check it through the official app yourself".
-- **Asks before anything is sent.** Adding a family contact, the invite, and every family alert each need an explicit yes. The family contact opts in themselves, and can say no.
-- **Never asks for passwords, card numbers or ID numbers.** If a message contains them, Sage flags it and never repeats them. Screenshots are never stored.
-- **Fails safely.** If the web or the AI is slow, Sage says so plainly, gives safe default advice, and you can reply `try again`. Sends are retried if the connection drops.
+Every message comes from one module (`src/format.ts`), so the voice and layout stay consistent.
+
+| Element | Meaning | Example |
+|---|---|---|
+| Colour, always first | The verdict | 🔴 Scam · 🟠 Be careful · 🟡 Can't confirm · 🟢 Looks real |
+| 🚩 / ✅ / ℹ️ | Red flag / reassuring / note, chosen by the verdict | 🚩 Asks you to reply with your SIN |
+| 1️⃣ 2️⃣ 3️⃣ | Steps, verb first, deduplicated | 1️⃣ Delete the text |
+| 📞 | Official number, only if found on the official site | 📞 Canada Post: 1-866-607-6301 |
+| 📚 | Short source names; `links` for full URLs | 📚 Sources: canada.ca |
+| Preview card | One official page instead of a list of links | Shopify Careers |
+
+All AI-written text follows a shared **writing style**: plain words a 12-year-old understands, no jargon ("website", not "domain"), no dashes, and none of the common tells of AI writing (adapted from the *humanizer* skill and Wikipedia's "Signs of AI writing"). Verdicts and headings are written in the user's language.
 
 ---
 
-## Run it yourself (about 10 minutes)
+## 🧪 Quality
 
-**You need:** a Mac (voice-note conversion uses macOS's built-in `afconvert`; everything else also runs on Linux), [Bun](https://bun.sh), and three free keys.
+`bun run eval` runs a live test set against the real web and prints each verdict, its red flags, its sources and its timing.
 
-1. **Photon Spectrum**: create a project at [app.photon.codes](https://app.photon.codes), add an iMessage line, and copy the **Project ID** and **Project Secret** from Settings. On the Free/Pro plan, add every phone number that will text Sage under **Users**; Sage can only message registered users.
-2. **TinyFish**: create an API key at [agent.tinyfish.ai/api-keys](https://agent.tinyfish.ai/api-keys). Search and Fetch are free; the Agent uses credits.
-3. **Gemini**: create a free key at [aistudio.google.com](https://aistudio.google.com).
+| # | Input | Expected | Result |
+|---|---|---|---|
+| 1 | Fake Shopify internship asking for your SIN | 🔴 Scam | ✅ Agent: role not on Shopify's careers page |
+| 2 | "CRA refund" text with an unofficial link | 🔴 Scam | ✅ Link isn't canada.ca |
+| 3 | Canada Post $1.99 unpaid-duty text | 🔴 Scam | ✅ With Canada Post's real number |
+| 4 | A real Canada Post delivery notice | 🟡/🟢 | ✅ Never flagged |
+| 5 | WhatsApp "forward or pay $0.99" hoax | 🔴 False | ✅ Cites fact-checks |
+| 6 | "I got a weird email" | Ask for a screenshot | ✅ With how-to |
+| 7 | Screenshot of case 1 | Same as 1 | ✅ Read from the image |
+| 8 | "I already clicked and entered my password" | Calm steps | ✅ Then a check-in |
+| 9 | The Canada Post scam in French | Reply in French | ✅ 🔴 Arnaque |
+| 10 | A real Google security alert | 🟡/🟢 | ✅ No specific red flags |
+
+Beyond the test set, Sage was hardened in **real iMessage conversations**: real salon bookings, real Google alerts, dropped connections, repeated messages, follow-up questions. Each finding is a commit in the history.
+
+---
+
+## 🚀 Quick start
+
+**Requirements:** macOS (voice-note conversion uses the built-in `afconvert`; everything else also runs on Linux), [Bun](https://bun.sh), and three keys, each with a free tier.
+
+| Service | Where | Notes |
+|---|---|---|
+| **Photon Spectrum** | [app.photon.codes](https://app.photon.codes) → project → Settings | Project ID + secret. On Free/Pro, add every number that will text Sage under **Users** |
+| **TinyFish** | [agent.tinyfish.ai/api-keys](https://agent.tinyfish.ai/api-keys) | Search and Fetch are free; the Agent uses credits |
+| **Gemini** | [aistudio.google.com](https://aistudio.google.com) | Free tier |
 
 ```bash
 git clone <this repo> sage && cd sage
 bun install
-cp .env.example .env     # put your keys in .env (never in .env.example)
-bun run smoke            # checks every service responds (add --agent to test the Agent too)
-bun run start            # Sage is live on your Photon iMessage line
+cp .env.example .env        # add your keys to .env (never to .env.example)
+bun run smoke               # verify every service (add --agent to test the Agent)
+bun run start               # Sage is live on your Photon iMessage line
 ```
-
-**Try it without a phone**
 
 ```bash
-bun run terminal                                  # chat with Sage in your terminal
+bun run terminal            # chat with Sage in your terminal, no phone needed
 bun run check "Canada Post: your parcel is on hold, pay \$1.99 at canadapost-redelivery.info"
-bun run eval                                      # the full test set against the live web
+bun run eval                # the live test set
 ```
 
-### Settings (`.env`)
+<details>
+<summary><b>Configuration reference</b></summary>
 
-| Variable | Default | What it does |
+| Variable | Default | Purpose |
 |---|---|---|
-| `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET` | | Photon project credentials |
+| `SPECTRUM_PROJECT_ID` · `SPECTRUM_PROJECT_SECRET` | | Photon credentials |
 | `TINYFISH_API_KEY` | | TinyFish key |
 | `GEMINI_API_KEY` | | Gemini key |
-| `GEMINI_MODEL` / `GEMINI_FALLBACK_MODEL` / `GEMINI_JUDGE_MODEL` | `gemini-3.5-flash-lite` / `gemini-3.1-flash-lite` / main model | Models; every call has a timeout and switches model on overload |
-| `ALLOWLIST` | empty (anyone) | Demo mode: only these numbers or emails get replies (comma-separated) |
-| `CHECKS_PER_USER_PER_DAY` | `8` | Per-person daily limit (only successful checks count) |
+| `GEMINI_MODEL` · `GEMINI_FALLBACK_MODEL` · `GEMINI_JUDGE_MODEL` | `gemini-3.5-flash-lite` · `gemini-3.1-flash-lite` · main | Models; calls time out at 20 s and fail over between models |
+| `ALLOWLIST` | empty (anyone) | Only these numbers or emails get replies |
+| `CHECKS_PER_USER_PER_DAY` | `8` | Daily limit per person (successful checks only) |
 | `AGENT_RUNS_PER_DAY` | `40` | Global cap on credit-using Agent runs |
-| `CHECKIN_MINUTES` | `60` | When to check in after "I already clicked" (set `1` for a demo) |
-| `SAGE_NAME`, `SAGE_MODE` | `Sage`, `imessage` | Bot name; `terminal` to run without a phone |
+| `CHECKIN_MINUTES` | `60` | Check-in delay after "I already clicked" (`1` for demos) |
+| `SAGE_NAME` · `SAGE_MODE` | `Sage` · `imessage` | Bot name; `terminal` runs without a phone |
+
+</details>
+
+<details>
+<summary><b>Project structure</b></summary>
+
+```
+src/
+  index.ts        Photon loop: inbound pipeline, profile, intents, alert cards, check-ins, retries
+  brain.ts        Gemini: understand · judge (JSON Schema) · damage control · profile · writing style
+  investigate.ts  TinyFish orchestration, link check, trust layer, cache
+  tinyfish.ts     Search / Fetch / Agent (streaming) clients, country-aware search, budgets
+  format.ts       The message design system: every layout and all fixed copy
+  db.ts           SQLite schema, migrations and queries
+  config.ts       Environment configuration
+scripts/
+  smoke.ts        Service health check
+  check.ts        One-off check from the terminal
+  eval.ts         Live test set
+docs/
+  architecture.html  Interactive system explorer
+  DEMO.md            60-second demo script and launch posts
+```
+
+</details>
 
 ---
 
-## Tested
+## 🔐 Privacy & limits
 
-`bun run eval` runs ten cases against the live web and prints the verdict, red flags, sources and timing:
-
-| # | Input | Result |
-|---|---|---|
-| 1 | Fake Shopify internship asking for your SIN | 🔴 Scam: the Agent finds no such role on Shopify's real careers page |
-| 2 | "CRA refund" text with an unofficial link | 🔴 Scam: link isn't canada.ca; CRA says it doesn't text refunds |
-| 3 | Canada Post $1.99 unpaid-duty text | 🔴 Scam, with Canada Post's real number |
-| 4 | A real Canada Post delivery notice | 🟡 Can't confirm / 🟢 Looks real, never "safe" |
-| 5 | WhatsApp "forward this or pay $0.99" hoax | 🔴 False, citing fact-checks |
-| 6 | "I got a weird email" | Asks for a screenshot (how to take one) |
-| 7 | **Screenshot** of case 1 | Same as case 1, read from the image |
-| 8 | "I already clicked and entered my password" | Calm steps, then a check-in |
-| 9 | The Canada Post scam **in French** | 🔴 Arnaque, fully in French |
-| 10 | A real Google security alert | 🟡 Can't confirm: no specific red flags |
-
-It was also tested in real iMessage conversations (screenshots, a real salon booking text, a real Google alert, follow-up questions, "links", "try again", check-ins and alert cards), and fixed along the way. The commit history records each fix.
+- **Keys** live only in `.env` (gitignored). There are no keys or real personal data in this repository; the test screenshot uses a fictional 555 number.
+- **Stored:** first name, city and country, language, a short text history, check summaries and links, and the family contact. **Never stored:** screenshots and voice notes.
+- **Gemini free tier** may use inputs to improve Google's models; use a paid key for sensitive deployments.
+- **Photon Free/Pro** messages only users registered in the dashboard, and each user may be assigned a different Sage number from a shared pool. The Business plan's dedicated number lifts both.
 
 ---
 
-## Privacy
+<div align="center">
 
-- Keys live only in `.env` (gitignored). No keys or personal data are in this repo; the test screenshot uses a fictional 555 number.
-- Sage stores your first name, city and country, language, a short conversation history, check summaries and links, and your family contact. **Screenshots and voice notes are never stored.**
-- Gemini's free tier may use inputs to improve Google's models; use a paid key for anything sensitive. Don't send passwords or card numbers. Sage flags them and never repeats them.
+**Built for TinyFish Student Bounty Drop 001 · *Build Your Own AI Assistant on iMessage***
 
-## Limits worth knowing
+Photon Spectrum × TinyFish · by Vivek Salwan
 
-- On Photon's Free/Pro plan, Sage can only text **users registered in the Photon dashboard**, and each user may be assigned a different Sage number from a shared pool. A dedicated number (Business plan) lifts both.
-- A full check takes about 30 to 90 seconds; the progress bubble shows each step meanwhile.
-- Voice-note conversion needs macOS (`afconvert`).
-
-## Project layout
-
-```
-src/index.ts        Photon loop: bursts, dedupe, profile, intents, alert cards, check-ins, retries
-src/brain.ts        Gemini: understand · judge (schema-enforced) · damage control · profile; shared writing style
-src/investigate.ts  TinyFish Search → Fetch → Agent, link check, red-flag and citation rules, cache
-src/tinyfish.ts     Search / Fetch / Agent (streaming) wrappers, country-aware search, budgets
-src/format.ts       Every message layout and all fixed copy, in one place
-src/db.ts           SQLite: users, turns, checks, cache, usage, follow-ups
-scripts/            smoke · check · eval (live test set) · fixtures
-```
-
-Built by Vivek Salwan for TinyFish Student Bounty Drop 001 · Photon Spectrum + TinyFish
+</div>
