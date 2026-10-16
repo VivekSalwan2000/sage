@@ -153,7 +153,15 @@ Students get these near-daily: fake internships and recruiters, *"CRA owes you a
 
 ## 🏗 System architecture
 
-> 🧭 **Prefer to click through it?** Open the [**interactive system explorer**](https://viveksalwan2000.github.io/sage/architecture.html): play one check step by step with the live path highlighted, or click any component for its role, limits and source file.
+<div align="center">
+
+<a href="https://viveksalwan2000.github.io/sage/architecture.html">
+  <img src="docs/media/explorer-preview.gif" width="900" alt="Interactive system explorer: one check plays through 12 steps, with the active path highlighted on the architecture map and an iMessage mock-up showing what the user sees">
+</a>
+
+**[🧭 Open the interactive system explorer](https://viveksalwan2000.github.io/sage/architecture.html)** · play one check step by step, or click any component for its role, limits and source file
+
+</div>
 
 ```mermaid
 flowchart TB

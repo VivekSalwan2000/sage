@@ -387,7 +387,14 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "ArrowLeft") { stop(); go(step - 1); }
   if (e.key === " ") { e.preventDefault(); play(); }
 });
-go(0);
+// Deep links: #step=7 opens that step (handy for sharing); ?capture=1 hides the page header for clean screenshots.
+const startStep = Number((location.hash.match(/step=(\d+)/) || [])[1] || 1) - 1;
+if (new URLSearchParams(location.search).has("capture")) {
+  const st = document.createElement("style");
+  st.textContent = "header,.sub,.tags,footer{display:none!important}.wrap{padding-top:18px!important}.chat{height:640px!important}.story{margin-top:14px!important}*{animation-duration:0s!important}";
+  document.head.appendChild(st);
+}
+go(startStep);
 </script>
 </body>
 </html>
