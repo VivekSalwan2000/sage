@@ -205,8 +205,10 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
   addTurn(senderId, "user", texts.join("\n") + (media.length ? ` [+${media.length} attachment]` : ""));
 
   // 1) Is this a guardian answering an invite?
+  // (Skipped if the sender is also a Sage user with their own yes/no question waiting, so that answer isn't stolen.)
   const inviter = findUserByGuardianPhone(normalizeHandle(senderId));
-  if (inviter && texts.length && (YES.test(texts[0]!) || NO.test(texts[0]!))) {
+  const ownPending = getPending(getUser(senderId));
+  if (inviter && !ownPending && texts.length && (YES.test(texts[0]!) || NO.test(texts[0]!))) {
     const accepted = YES.test(texts[0]!);
     updateUser(inviter.id, { guardian_status: accepted ? "confirmed" : null, ...(accepted ? {} : { guardian_phone: null, guardian_name: null }) });
     await say(space, senderId, accepted ? COPY.guardianYes(inviter.name ?? "your family member") : COPY.guardianNo);
@@ -335,7 +337,7 @@ async function runCheck(space: Space, user: User, last: Message | undefined, che
   if (usageGet(key) >= config.checksPerUserPerDay) {
     return say(space, user.id, COPY.dailyLimit(config.checksPerUserPerDay));
   }
-  usageInc(key);
+  // Counted only after a check succeeds (below): a slow web / "try again" loop shouldn't burn the daily limit.
 
   if (last) await safeReact(last, "‼️"); // instant "got it" — iMessage tapback
   addTurn(user.id, "sage", "(checking…)");
@@ -346,14 +348,17 @@ async function runCheck(space: Space, user: User, last: Message | undefined, che
   const MAX_EDITS = 5;
   let progressMsg: Message | undefined;
   let edits = 0;
+  let started = false; // the first update is sent once; if the platform returns no handle, later ones are dropped
   let queue: Promise<void> = Promise.resolve();
   const update = (line: string, final = false) => {
     queue = queue.then(async () => {
       try {
-        if (!progressMsg) {
-          progressMsg = (await space.send(line)) ?? undefined;
+        if (!started) {
+          started = true;
+          progressMsg = (await send(space, line)) ?? undefined;
           return;
         }
+        if (!progressMsg) return;
         if (edits >= MAX_EDITS || (!final && edits >= MAX_EDITS - 1)) return;
         edits++;
         await progressMsg.edit(line);
@@ -374,6 +379,7 @@ async function runCheck(space: Space, user: User, last: Message | undefined, che
     // One website preview card (title + image) instead of a list of long links. Best-effort.
     if (inv.preview) await send(space, richlink(inv.preview)).catch((e) => console.warn("[preview]", (e as Error).message));
 
+    if (!inv.fromCache) usageInc(key);
     const j = inv.judgement;
     const links = inv.sources.length ? inv.sources.map((s) => s.url) : inv.checked ?? [];
     const checkId = saveCheck(user.id, check.type, j.verdict, j.headline, check.summary, links);
@@ -450,7 +456,7 @@ for await (const [space, message] of app.messages) {
   if (["read", "typing", "reaction", "poll_option", "addMember", "removeMember", "leaveSpace", "rename", "avatar"].includes(t)) continue;
   if (seen.has(message.id)) continue; // at-least-once delivery → dedupe
   seen.add(message.id);
-  if (seen.size > 5000) seen.clear();
+  if (seen.size > 5000) for (const old of [...seen].slice(0, 1000)) seen.delete(old); // drop the oldest only
 
   const senderId = message.sender?.id ?? space.id;
   if (config.allowlist.length && !config.allowlist.map(normalizeHandle).includes(normalizeHandle(senderId))) {

@@ -60,11 +60,21 @@ function excerpt(text: string, max = 1400): string {
 }
 
 /** Pick the organisation's official domain from search results, preferring the model's guess if confirmed. */
-function pickOfficial(hits: SearchHit[], guess?: string | null): string | null {
+/**
+ * The organisation's official domain. Never the message's own link domains (the scam site can rank in search), and a
+ * search hit only counts if its domain contains part of the sender's name ("Canada Post" → canadapost-postescanada.ca),
+ * so a news article or scam-report site that ranks first isn't mistaken for the official site.
+ */
+function pickOfficial(hits: SearchHit[], guess: string | null | undefined, sender: string, linkDomains: string[]): string | null {
+  const notLink = (d: string | null): d is string => !!d && !linkDomains.includes(d);
   const g = guess ? regDomain(guess) : null;
-  if (g && hits.some((h) => regDomain(h.url) === g)) return g;
-  const first = hits.find((h) => !SOCIAL.test(h.url));
-  return first ? regDomain(first.url) : g;
+  if (notLink(g) && hits.some((h) => regDomain(h.url) === g)) return g;
+  const tokens = sender.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 3);
+  const named = hits
+    .map((h) => regDomain(h.url))
+    .find((d) => notLink(d) && !SOCIAL.test(d + "/") && tokens.some((t) => d.replace(/[^a-z0-9]/g, "").includes(t)));
+  if (named) return named;
+  return notLink(g) ? g : null; // the model's unconfirmed guess (e.g. canada.ca for CRA) beats a random first hit
 }
 
 /** An official phone/email/URL counts only if it appears in an official-site or agent-visited source. */
@@ -120,7 +130,7 @@ export async function investigate(check: Check, language: string, progress: Prog
       linkDomains.length ? search(`${linkDomains[0]} scam`, { purpose: "Find reports about this suspicious website" }) : Promise.resolve([] as SearchHit[]),
       sender ? search(`${sender} official website`, { purpose: "Identify the organisation's real official domain" }) : Promise.resolve([] as SearchHit[]),
     ]);
-    const officialDomain = pickOfficial(official, check.official_domain_guess);
+    const officialDomain = pickOfficial(official, check.official_domain_guess, sender, linkDomains);
     // Third-party reports only (the official site is read separately); interleave both searches, dedupe.
     const reports: SearchHit[] = [];
     for (let i = 0; i < 8; i++) {
@@ -273,8 +283,12 @@ export async function investigate(check: Check, language: string, progress: Prog
   // A scam verdict must rest on red flags in this message, not on "scammers often impersonate X" (live testing: a real
   // Google security alert and a real salon booking came back SUSPICIOUS on generic grounds). The small model doesn't
   // always obey, so enforce it: drop flags the code can disprove, then require at least one.
-  const verifiable = (j: Judgement) =>
-    (j.red_flags ?? []).filter((f) => (f !== "link_not_official" || linkMismatch) && (f !== "role_not_on_official_site" || roleMissing));
+  // "Org says it never sends this" is the one flag the code can't check, and the model over-reads fraud pages with it
+  // (a real Canada Post delivery text came back SCAM on that alone), so it only counts alongside another flag.
+  const verifiable = (j: Judgement) => {
+    const f = (j.red_flags ?? []).filter((x) => (x !== "link_not_official" || linkMismatch) && (x !== "role_not_on_official_site" || roleMissing));
+    return f.length === 1 && f[0] === "org_says_never_sends_this" ? [] : f;
+  };
   const unsupported = (j: Judgement) => (j.verdict === "SCAM" || j.verdict === "SUSPICIOUS") && verifiable(j).length === 0;
   if (unsupported(judgement)) {
     // Ask once for a rewrite, so the headline and advice match the honest verdict (not "this might be a trick").
@@ -289,6 +303,13 @@ export async function investigate(check: Check, language: string, progress: Prog
     }
   }
   judgement.red_flags = verifiable(judgement);
+  // SCAM needs a decisive flag (bad link, asks for personal info or money) or two flags; otherwise it's "be careful".
+  const DECISIVE = ["link_not_official", "asks_personal_info", "asks_payment"];
+  if (judgement.verdict === "SCAM" && judgement.red_flags.length < 2 && !judgement.red_flags.some((f) => DECISIVE.includes(f))) {
+    console.warn(`[judge] SCAM on one weak flag (${judgement.red_flags.join(",")}) → SUSPICIOUS`);
+    judgement.verdict = "SUSPICIOUS";
+    if (judgement.labels) delete judgement.labels.verdict;
+  }
 
   // Never fake a source: keep only citations that point at real fetched/searched items.
   const valid = new Set(sources.map((s) => s.id));
