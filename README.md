@@ -32,65 +32,11 @@
 
 **[▶ Watch the full 60-second demo (with sound)](https://viveksalwan2000.github.io/sage/demo.html)** · [Download MP4](docs/media/sage-demo.mp4)
 
+Behind that minute: **three web searches, a live read of Shopify's own pages, and an AI agent that opened Shopify's real careers site and searched it for the job.** Every claim in the verdict points to a page Sage actually read.
+
 <sub>A real iMessage conversation recorded on an iPhone. Narration is AI-generated (Gemini TTS); the side panel shows which part of the system is working at each moment.</sub>
 
 </div>
-
----
-
-## 📱 The product in one conversation
-
-> A student gets a text: *"Congrats! You've been selected for a Remote Data Analyst internship at Shopify, $45/hr. Reply with your SIN to start onboarding."* They screenshot it and send it to Sage.
-
-<table>
-<tr>
-<td width="50%" valign="top">
-
-**What they see, live**
-```
-‼️  (tapback, instantly)
-
-🔎 Looking into this for you…
-📖 Reading what Shopify and others say…
-🧭 Searching Shopify's real job listings…
-✅ Done · checked 5 sources
-```
-```
-🔴 Scam
-This fake job offer is trying to get
-your personal details.
-
-🚩 No such role is listed on Shopify's
-   real careers page
-🚩 Asks you to reply with your SIN
-```
-
-</td>
-<td width="50%" valign="top">
-
-**…followed by**
-```
-What to do
-1️⃣ Don't reply or send your SIN
-2️⃣ Block the number and delete the text
-3️⃣ Search jobs on shopify.com/careers
-   yourself
-
-📚 Sources: shopify.com, consumer.ftc.gov
-Reply "links" for the full links
-```
-`[ preview card: Shopify Careers ]`
-```
-👨‍👩‍👧 Scams like this often reach family
-too. Want an alert card you can
-forward to them? Reply yes or no.
-```
-
-</td>
-</tr>
-</table>
-
-Behind that minute: **three web searches, a live read of Shopify's own pages, and an AI agent that opened Shopify's real careers site and searched it for the job.** Every claim in the verdict points to a page Sage actually read.
 
 ---
 
