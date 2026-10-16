@@ -189,12 +189,12 @@ export const COPY = {
   dailyLimit: (n: number) =>
     `⏸️ You've used today's ${n} checks. I'll be ready again tomorrow.\nIf it's urgent, call the company using the number on their official website.`,
   somethingWrong: "😕 Something went wrong on my side. Please try again.",
-  askNumber: '📇 What\'s their phone number? For example: add my mom +1 905 555 0123',
-  ownNumber: "🙂 That's your own number. Who should I add?",
+  askNumber: "📇 What's their phone number or iMessage email? For example: add my mom +1 905 555 0123",
+  ownNumber: "🙂 That's you. Who should I add?",
   confirmGuardian: (name: string, phone: string) =>
     `📇 I'll text ${name} at ${phone} to ask if they'd like scam alerts from you.\nSend it? Reply yes or no.`,
   guardianInviteSent: (name: string) => `✅ Sent. I'll tell you when ${name} replies.`,
-  guardianUnreachable: (phone: string) => `😕 I couldn't reach ${phone}. Is that number right?`,
+  guardianUnreachable: (address: string) => `😕 I couldn't reach ${address}. Is that right, and is it added in Photon?`,
   noContact: "👍 Okay, I won't contact them.",
   noSend: "👍 Okay, I won't send anything.",
   offerAlert: (name: string) => `👨‍👩‍👧 Want me to warn ${name} about this scam?\nReply yes or no.`,

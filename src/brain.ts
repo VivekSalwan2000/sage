@@ -128,7 +128,9 @@ Rules:
   "is it true that..." questions about the world.
 - "need_screenshot" when they describe something vague ("I got a weird email"). reply: ask them to send a screenshot, with simple how-to (iPhone: press side button + volume up; then tap + in Messages and send it). Never ask for passwords or account numbers.
 - "already_clicked" when they say they clicked, paid, replied, or shared info with something suspicious.
-- "set_guardian" when they ask to add/link a family member who should be warned about scams. phone must be E.164 (assume +1 if 10 digits). If no number given, use intent "chat" and ask for it.
+- "set_guardian" when they ask to add/link a family member who should be warned about scams. guardian.phone is their iMessage
+  address: a phone number in E.164 (assume +1 if 10 digits) or an email address exactly as given. If neither is given, use
+  intent "chat" and ask for it.
 - "yes"/"no" when the message is just answering a yes/no question the assistant asked (see PENDING).
 - "followup" when they ask about a check in RECENT CHECKS without sending anything new to check ("so is it legit?", "why?",
   "are you sure?", "what should I do?"). reply: answer from that check in max 3 short sentences, using its verdict and headline.

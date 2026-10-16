@@ -97,7 +97,7 @@ export function setPending(id: string, p: Pending | null) {
 }
 
 export function findUserByGuardianPhone(phone: string): User | null {
-  return (db.query("SELECT * FROM users WHERE guardian_phone = ? AND guardian_status = 'invited' ORDER BY created_at DESC").get(phone) as User) ?? null;
+  return (db.query("SELECT * FROM users WHERE lower(guardian_phone) = lower(?) AND guardian_status = 'invited' ORDER BY created_at DESC").get(phone) as User) ?? null;
 }
 
 export function addTurn(userId: string, role: "user" | "sage", text: string) {

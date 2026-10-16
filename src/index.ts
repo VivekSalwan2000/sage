@@ -61,8 +61,13 @@ async function safeReact(message: Message, emoji: string) {
   }
 }
 
+/** iMessage addresses compare case-insensitively for emails ("Name@Gmail.com" = "name@gmail.com"). */
+const normalizeHandle = (h: string) => (h.includes("@") ? h.trim().toLowerCase() : h.trim());
+const isHandle = (h: string) => /^\+\d{10,15}$/.test(h) || /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(h);
+
 /** Masks a phone number for logs: +19055551234 → +1905***1234. */
-const mask = (id: string) => id.replace(/^(\+?\d{4})\d+(\d{4})$/, "$1***$2");
+const mask = (id: string) =>
+  id.includes("@") ? id.replace(/^(.{2})[^@]*(@.*)$/, "$1***$2") : id.replace(/^(\+?\d{4})\d+(\d{4})$/, "$1***$2");
 
 // Gemini accepts these audio types; iMessage voice notes are usually Core Audio (.caf), which it rejects.
 const GEMINI_AUDIO = /^audio\/(wav|x-wav|mp3|mpeg|aiff|x-aiff|aac|ogg|flac)$/;
@@ -200,7 +205,7 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
   addTurn(senderId, "user", texts.join("\n") + (media.length ? ` [+${media.length} attachment]` : ""));
 
   // 1) Is this a guardian answering an invite?
-  const inviter = findUserByGuardianPhone(senderId);
+  const inviter = findUserByGuardianPhone(normalizeHandle(senderId));
   if (inviter && texts.length && (YES.test(texts[0]!) || NO.test(texts[0]!))) {
     const accepted = YES.test(texts[0]!);
     updateUser(inviter.id, { guardian_status: accepted ? "confirmed" : null, ...(accepted ? {} : { guardian_phone: null, guardian_name: null }) });
@@ -277,12 +282,12 @@ async function handle(space: Space, senderId: string, messages: Message[]) {
       return say(space, senderId, u.reply ?? `Nice to meet you, ${u.name}!`);
 
     case "set_guardian": {
-      if (!u.guardian?.phone || !/^\+\d{10,15}$/.test(u.guardian.phone)) {
-        return say(space, senderId, COPY.askNumber);
-      }
-      if (u.guardian.phone === senderId) return say(space, senderId, COPY.ownNumber);
-      setPending(senderId, { type: "confirm_guardian", name: u.guardian.name || "your contact", phone: u.guardian.phone });
-      return say(space, senderId, COPY.confirmGuardian(u.guardian.name || "them", u.guardian.phone));
+      // A family contact is any iMessage address: a phone number or an Apple ID email.
+      const address = normalizeHandle(u.guardian?.phone ?? "");
+      if (!isHandle(address)) return say(space, senderId, COPY.askNumber);
+      if (address === normalizeHandle(senderId)) return say(space, senderId, COPY.ownNumber);
+      setPending(senderId, { type: "confirm_guardian", name: u.guardian?.name || "your contact", phone: address });
+      return say(space, senderId, COPY.confirmGuardian(u.guardian?.name || "them", address));
     }
 
     case "help":
@@ -448,7 +453,7 @@ for await (const [space, message] of app.messages) {
   if (seen.size > 5000) seen.clear();
 
   const senderId = message.sender?.id ?? space.id;
-  if (config.allowlist.length && !config.allowlist.includes(senderId)) {
+  if (config.allowlist.length && !config.allowlist.map(normalizeHandle).includes(normalizeHandle(senderId))) {
     console.info(`[inbound] ignored ${t} from ${mask(senderId)} (not in ALLOWLIST)`);
     continue; // demo mode
   }
