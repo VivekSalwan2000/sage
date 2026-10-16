@@ -46,13 +46,7 @@ Students get these near-daily: fake internships and recruiters, *"CRA owes you a
 
 **Sage turns "is this real?" into a one-text habit.** No app to install and no account. It answers in plain language anyone can follow, in the app where the scam arrived.
 
-| | Outcome |
-|---|---|
-| 🧭 **Real investigation, not vibes** | Every verdict comes from live web work: reports, the organisation's official site, and an agent that checks the real website |
-| 🔴🟠🟡🟢 **One clear answer** | Scam · Be careful · Can't confirm · Looks real (fact-checks: False · Misleading · Unproven · True) |
-| 🛡️ **Trust you can audit** | Real sources only, red flags tied to *this* message, never "safe to click", nothing sent without a yes |
-| 👨‍👩‍👧 **Protects the family too** | One-tap alert cards for family, sent directly or forwarded |
-| 🙂 **Feels like a person** | Remembers you, replies in your language, checks in after a bad moment, and stays quiet otherwise |
+**One clear answer:** 🔴 Scam · 🟠 Be careful · 🟡 Can't confirm · 🟢 Looks real (and for forwarded claims: False · Misleading · Unproven · True).
 
 ---
 
@@ -110,7 +104,7 @@ Students get these near-daily: fake internships and recruiters, *"CRA owes you a
 </div>
 
 <details>
-<summary><b>🗺️ View the architecture diagram</b></summary>
+<summary><h3>👉 Click to view the architecture diagram</h3></summary>
 
 ```mermaid
 flowchart TB
@@ -172,7 +166,7 @@ flowchart TB
 The full path of one message, from the moment it's sent to the moment the family alert card is offered.
 
 <details>
-<summary><b>🛰️ View the step-by-step sequence diagram</b></summary>
+<summary><h3>👉 Click to view the step-by-step sequence diagram</h3></summary>
 
 ```mermaid
 sequenceDiagram
@@ -234,8 +228,10 @@ sequenceDiagram
 
 ## 🔬 Investigation pipeline
 
+How Sage decides what to search, read and check: one path for messages sent to you (scam checks), another for forwarded claims (fact-checks).
+
 <details>
-<summary><b>🔬 View the pipeline diagram</b></summary>
+<summary><h3>👉 Click to view the pipeline diagram</h3></summary>
 
 ```mermaid
 flowchart TD
@@ -270,7 +266,7 @@ Results are **cached for 24 h per message and language**, so a scam forwarded by
 Trust is enforced **in code**, not only requested in a prompt. The model proposes; the code verifies.
 
 <details>
-<summary><b>🛡️ View the trust-check flowchart</b></summary>
+<summary><h3>👉 Click to view the trust-check flowchart</h3></summary>
 
 ```mermaid
 flowchart TD
@@ -305,8 +301,10 @@ flowchart TD
 
 ## 💬 Conversation lifecycle
 
+How a conversation moves from the first hello to a verdict, a family alert card, and a check-in after a bad moment.
+
 <details>
-<summary><b>💬 View the conversation state diagram</b></summary>
+<summary><h3>👉 Click to view the conversation state diagram</h3></summary>
 
 ```mermaid
 stateDiagram-v2
@@ -348,8 +346,10 @@ stateDiagram-v2
 
 ## 🗄 Data model
 
+Six small SQLite tables. Sage remembers a person and their checks, but never stores screenshots or voice notes.
+
 <details>
-<summary><b>🗄️ View the data model diagram</b></summary>
+<summary><h3>👉 Click to view the data model diagram</h3></summary>
 
 ```mermaid
 erDiagram
@@ -462,7 +462,7 @@ bun run eval                # the live test set
 ```
 
 <details>
-<summary><b>Configuration reference</b></summary>
+<summary><h3>⚙️ Configuration reference</h3></summary>
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -479,7 +479,7 @@ bun run eval                # the live test set
 </details>
 
 <details>
-<summary><b>Project structure</b></summary>
+<summary><h3>🗂️ Project structure</h3></summary>
 
 ```
 src/
@@ -494,9 +494,11 @@ scripts/
   smoke.ts        Service health check
   check.ts        One-off check from the terminal
   eval.ts         Live test set
-docs/
-  architecture.html  Interactive system explorer
-  DEMO.md            60-second demo script and launch posts
+docs/                (served by GitHub Pages)
+  architecture.html  Interactive system explorer (#step=N deep links)
+  demo.html          60-second demo video page
+  media/             Demo video, preview GIFs, poster
+  DEMO.md            Demo script and launch posts
 ```
 
 </details>
