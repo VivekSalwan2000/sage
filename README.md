@@ -20,7 +20,40 @@
 
 </div>
 
----
+<table>
+<tr>
+<td valign="top" width="33%">
+
+**🟢 Product**<br>
+<code>01</code> <a href="#-see-it-in-action">See it in action</a><br>
+<code>02</code> <a href="#-why-it-exists">Why it exists</a><br>
+<code>03</code> <a href="#-capabilities">Capabilities</a>
+
+</td>
+<td valign="top" width="33%">
+
+**🟠 How it works**<br>
+<code>04</code> <a href="#-system-architecture">System architecture</a><br>
+<code>05</code> <a href="#-how-a-check-travels">How a check travels</a><br>
+<code>06</code> <a href="#-investigation-pipeline">Investigation pipeline</a><br>
+<code>07</code> <a href="#-trust-model">Trust model</a><br>
+<code>08</code> <a href="#-conversation-lifecycle">Conversation lifecycle</a><br>
+<code>09</code> <a href="#-data-model">Data model</a><br>
+<code>10</code> <a href="#-message-design-system">Message design system</a>
+
+</td>
+<td valign="top" width="33%">
+
+**🟣 Build and run**<br>
+<code>11</code> <a href="#-quality">Quality</a><br>
+<code>12</code> <a href="#-quick-start">Quick start</a><br>
+<code>13</code> <a href="#-privacy--limits">Privacy & limits</a>
+
+</td>
+</tr>
+</table>
+
+<img src="docs/media/sections/01.svg" width="100%" alt="Section 01">
 
 ## 🎬 See it in action
 
@@ -38,7 +71,9 @@ Behind that minute: **three web searches, a live read of Shopify's own pages, an
 
 </div>
 
----
+<p align="right"><a href="#sage"><sub>↑ Back to top</sub></a></p>
+
+<img src="docs/media/sections/02.svg" width="100%" alt="Section 02">
 
 ## 🎯 Why it exists
 
@@ -48,7 +83,9 @@ Students get these near-daily: fake internships and recruiters, *"CRA owes you a
 
 **One clear answer:** 🔴 Scam · 🟠 Be careful · 🟡 Can't confirm · 🟢 Looks real (and for forwarded claims: False · Misleading · Unproven · True).
 
----
+<p align="right"><a href="#sage"><sub>↑ Back to top</sub></a></p>
+
+<img src="docs/media/sections/03.svg" width="100%" alt="Section 03">
 
 ## ✨ Capabilities
 
@@ -89,7 +126,9 @@ Students get these near-daily: fake internships and recruiters, *"CRA owes you a
 </td></tr>
 </table>
 
----
+<p align="right"><a href="#sage"><sub>↑ Back to top</sub></a></p>
+
+<img src="docs/media/sections/04.svg" width="100%" alt="Section 04">
 
 ## 🏗 System architecture
 
@@ -159,7 +198,9 @@ flowchart TB
 | **Trust** | Validate citations, red flags, official contacts and verdict strength in code | TypeScript |
 | **Memory** | Profiles, conversation, checks and links, cache, follow-ups, usage limits | SQLite (`bun:sqlite`) |
 
----
+<p align="right"><a href="#sage"><sub>↑ Back to top</sub></a></p>
+
+<img src="docs/media/sections/05.svg" width="100%" alt="Section 05">
 
 ## 🛰 How a check travels
 
@@ -224,7 +265,9 @@ sequenceDiagram
 
 **Latency budget.** Understanding takes about 1 to 3 s and the searches 1 to 3 s. Fetch and the Agent run **in parallel**: the Agent gets 35 s for a fraud-reporting check and 75 s for a careers search. Judging takes about 2 to 5 s. A typical check lands in **30 to 90 s**, and the progress bubble shows each stage so the wait never feels silent.
 
----
+<p align="right"><a href="#sage"><sub>↑ Back to top</sub></a></p>
+
+<img src="docs/media/sections/06.svg" width="100%" alt="Section 06">
 
 ## 🔬 Investigation pipeline
 
@@ -259,7 +302,9 @@ flowchart TD
 
 Results are **cached for 24 h per message and language**, so a scam forwarded by twenty people is investigated once.
 
----
+<p align="right"><a href="#sage"><sub>↑ Back to top</sub></a></p>
+
+<img src="docs/media/sections/07.svg" width="100%" alt="Section 07">
 
 ## 🛡 Trust model
 
@@ -297,7 +342,9 @@ flowchart TD
 | **No sensitive data** | Never asks for passwords, card or ID numbers; flags them if present; screenshots and voice notes are never stored |
 | **Fails safely** | 20 s timeout on every AI call with automatic model failover; send retries on dropped connections; `try again` re-runs a failed check; failed checks don't count toward the daily limit |
 
----
+<p align="right"><a href="#sage"><sub>↑ Back to top</sub></a></p>
+
+<img src="docs/media/sections/08.svg" width="100%" alt="Section 08">
 
 ## 💬 Conversation lifecycle
 
@@ -342,7 +389,9 @@ stateDiagram-v2
 
 **"Texts at the right moment, otherwise stays quiet."** Sage only starts a message itself in two places: the alert-card offer straight after a 🔴 Scam verdict, and one check-in after *"I already clicked"*. Everything else is a reply.
 
----
+<p align="right"><a href="#sage"><sub>↑ Back to top</sub></a></p>
+
+<img src="docs/media/sections/09.svg" width="100%" alt="Section 09">
 
 ## 🗄 Data model
 
@@ -397,7 +446,9 @@ erDiagram
 
 </details>
 
----
+<p align="right"><a href="#sage"><sub>↑ Back to top</sub></a></p>
+
+<img src="docs/media/sections/10.svg" width="100%" alt="Section 10">
 
 ## 🎨 Message design system
 
@@ -414,7 +465,9 @@ Every message comes from one module (`src/format.ts`), so the voice and layout s
 
 All AI-written text follows a shared **writing style**: plain words a 12-year-old understands, no jargon ("website", not "domain"), no dashes, and none of the common tells of AI writing (adapted from the *humanizer* skill and Wikipedia's "Signs of AI writing"). Verdicts and headings are written in the user's language.
 
----
+<p align="right"><a href="#sage"><sub>↑ Back to top</sub></a></p>
+
+<img src="docs/media/sections/11.svg" width="100%" alt="Section 11">
 
 ## 🧪 Quality
 
@@ -435,7 +488,9 @@ All AI-written text follows a shared **writing style**: plain words a 12-year-ol
 
 Beyond the test set, Sage was hardened in **real iMessage conversations**: real salon bookings, real Google alerts, dropped connections, repeated messages, follow-up questions. Each finding is a commit in the history.
 
----
+<p align="right"><a href="#sage"><sub>↑ Back to top</sub></a></p>
+
+<img src="docs/media/sections/12.svg" width="100%" alt="Section 12">
 
 ## 🚀 Quick start
 
@@ -503,7 +558,9 @@ docs/                (served by GitHub Pages)
 
 </details>
 
----
+<p align="right"><a href="#sage"><sub>↑ Back to top</sub></a></p>
+
+<img src="docs/media/sections/13.svg" width="100%" alt="Section 13">
 
 ## 🔐 Privacy & limits
 
@@ -511,6 +568,8 @@ docs/                (served by GitHub Pages)
 - **Stored:** first name, city and country, language, a short text history, check summaries and links, and the family contact. **Never stored:** screenshots and voice notes.
 - **Gemini free tier** may use inputs to improve Google's models; use a paid key for sensitive deployments.
 - **Photon Free/Pro** messages only users registered in the dashboard, and each user may be assigned a different Sage number from a shared pool. The Business plan's dedicated number lifts both.
+
+<p align="right"><a href="#sage"><sub>↑ Back to top</sub></a></p>
 
 ---
 
