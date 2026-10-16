@@ -16,7 +16,23 @@
 ![Gemini](https://img.shields.io/badge/Reasoning-Gemini-4285F4?style=for-the-badge&logo=googlegemini&logoColor=white)
 ![Bun](https://img.shields.io/badge/Runtime-Bun_+_TypeScript-000000?style=for-the-badge&logo=bun&logoColor=white)
 
-[**How it works**](#-how-a-check-travels) · [**Architecture**](#-system-architecture) · [**Trust model**](#-trust-model) · [**Interactive explorer ↗**](https://viveksalwan2000.github.io/sage/architecture.html) · [**Run it**](#-quick-start)
+[**▶ Watch the demo**](https://viveksalwan2000.github.io/sage/demo.html) · [**How it works**](#-how-a-check-travels) · [**Architecture**](#-system-architecture) · [**Trust model**](#-trust-model) · [**Interactive explorer ↗**](https://viveksalwan2000.github.io/sage/architecture.html) · [**Run it**](#-quick-start)
+
+</div>
+
+---
+
+## 🎬 See it in action
+
+<div align="center">
+
+<a href="https://viveksalwan2000.github.io/sage/demo.html">
+  <img src="docs/media/sage-demo-preview.gif" width="860" alt="Sage demo: a fake Shopify internship text comes back as a red Scam verdict in iMessage, next to the live web-work panel">
+</a>
+
+**[▶ Watch the full 60-second demo (with sound)](https://viveksalwan2000.github.io/sage/demo.html)** · [Download MP4](docs/media/sage-demo.mp4)
+
+<sub>A real iMessage conversation recorded on an iPhone. Narration is AI-generated (Gemini TTS); the side panel shows which part of the system is working at each moment.</sub>
 
 </div>
 
