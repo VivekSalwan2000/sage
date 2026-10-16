@@ -14,20 +14,23 @@ This script covers all of them in 60 seconds.
 - [ ] **Never show** real emails, phone numbers or a real person's messages on screen.
 - [ ] Record the phone screen (Control Centre → Screen Recording). Optionally record the laptop terminal for one 3-second "web work" cut.
 
-## Shot list (about 60 s)
+## Shot list (60 s, timed to the AI voiceover)
+
+The narration is an AI voice (Gemini 2.5 TTS, voice "Charon"), generated into `demo/voice/voiceover-full.m4a` with captions in
+`demo/voiceover.srt` (both kept out of git). The times below follow that track, so cut the footage to them.
 
 | Time | On screen | Voiceover (read calmly) |
 |---|---|---|
-| 0:00–0:06 | Lock screen; the fake "Shopify internship, reply with your SIN" text arrives | "Every student gets these. A 'Shopify internship' that wants my SIN by text. Real, or a scam?" |
-| 0:06–0:12 | Screenshot it, open the **Sage** chat, send the screenshot + "is this real?" | "So I just send it to Sage, an assistant that lives in iMessage." |
-| 0:12–0:16 | ‼️ tapback appears instantly; typing dots | "It's on it right away." |
-| 0:16–0:32 | The progress bubble updating: 🔎 Looking into this… → 📖 Reading what Shopify says… → 🧭 Searching Shopify's real job listings… → ⏳ Still checking… (speed this part up 2–3×) | "Behind the scenes, TinyFish searches the web for this scam, reads Shopify's real pages, and sends an agent onto Shopify's actual careers site to look for this job." |
-| 0:32–0:42 | 🔴 **Scam** bubble lands (loud effect), then "What to do", sources, and the Shopify careers preview card | "Scam. No such role exists on Shopify's real careers page, and they'd never ask for your SIN. Clear steps, and every source is a page it actually read." |
-| 0:42–0:50 | "Want an alert card you can forward to family?" → **yes** → the ⚠️ Scam alert card → press-and-hold → Forward | "These scams reach my parents too, so Sage gives me a warning card for my family, but only when I say yes." |
-| 0:50–0:57 | Cut to a second chat: "oh no I already clicked it" → calm steps → "🕐 I'll check in with you…" → a minute later (cut) "👋 Hi Vivek, checking in…" | "And if I'd already clicked, it calms me down, gives me the steps, and checks in later." |
-| 0:57–1:00 | Sage logo + "Sage · Photon × TinyFish" | "Sage. Built with Photon and TinyFish." |
+| 0:00–0:09 | Lock screen; the fake "Shopify internship, reply with your SIN" text arrives | "Every student gets these. A 'Shopify internship' that wants my SIN by text. Real, or a scam?" |
+| 0:09–0:13 | Screenshot it, open the **Sage** chat, send the screenshot + "is this real?" | "So I just send it to Sage, an assistant that lives in iMessage." |
+| 0:13–0:16 | ‼️ tapback appears instantly; typing dots | "It's on it right away." |
+| 0:16–0:28 | The progress bubble updating: 🔎 Looking into this… → 📖 Reading what Shopify says… → 🧭 Searching Shopify's real job listings… → ⏳ Still checking… (speed this part up 2–3×) | "Behind the scenes, TinyFish searches the web for this scam, reads Shopify's real pages, and sends an agent onto Shopify's actual careers site to look for this job." |
+| 0:28–0:40 | 🔴 **Scam** bubble lands (loud effect), then "What to do", sources, and the Shopify careers preview card | "Scam. No such role exists on Shopify's real careers page, and they'd never ask for your SIN. Clear steps, and every source is a page it actually read." |
+| 0:40–0:48 | "Want an alert card you can forward to family?" → **yes** → the ⚠️ Scam alert card → press-and-hold → Forward | "These scams reach my parents too, so Sage gives me a warning card for my family, but only when I say yes." |
+| 0:48–0:55 | Cut to a second chat: "oh no I already clicked it" → calm steps → "🕐 I'll check in with you…" → a minute later (cut) "👋 Hi Vivek, checking in…" | "And if I'd already clicked, it calms me down, gives me the steps, and checks in later." |
+| 0:55–1:00 | Sage logo + "Sage · Photon × TinyFish" | "Sage. Built with Photon and TinyFish." |
 
-**If you have a family contact set up:** in the 0:42 shot, show "Want me to warn Mom?" → yes → cut to the second phone receiving the card. It's the strongest payoff shot.
+**If you have a family contact set up:** in the 0:40 shot, show "Want me to warn Mom?" → yes → cut to the second phone receiving the card. It's the strongest payoff shot.
 
 **Fallbacks:** if a check runs long, cut it. If a verdict differs from the script, keep the real one; judges value real over scripted.
 
